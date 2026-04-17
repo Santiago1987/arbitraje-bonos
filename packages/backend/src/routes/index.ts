@@ -3,15 +3,17 @@ import { z } from "zod";
 import {
   BondPairModel,
   PairSnapshotModel,
+  PairDailyModel,
   AlertConfigModel,
 } from "../models/index.js";
 import { pairCalculatorService } from "../services/pair-calculator.service.js";
 import { statisticsService } from "../services/statistics.service.js";
+import { dailyRollupService } from "../services/daily-rollup.service.js";
 import { alertEngine } from "../services/alert-engine.service.js";
 import { marketDataService } from "../services/market-data.service.js";
 import { bymaConnector } from "../services/byma-connector.service.js";
 import { wsServer } from "../websocket/ws-server.js";
-import type { StatsWindow } from "@arbitraje/shared";
+import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
 
 // ============================================================
 // Schemas de validación con Zod
@@ -39,6 +41,33 @@ const historyQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().min(1).max(10000).default(1000),
+});
+
+const dateKeyRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+const dailyQuerySchema = z.object({
+  from: z.string().regex(dateKeyRegex).optional(), // "YYYY-MM-DD"
+  to: z.string().regex(dateKeyRegex).optional(),
+  limit: z.coerce.number().min(1).max(2000).default(500),
+});
+
+const bandsQuerySchema = z.object({
+  windows: z
+    .string()
+    .default("5,10,20")
+    .transform((s) =>
+      s
+        .split(",")
+        .map((n) => parseInt(n.trim(), 10))
+        .filter((n) => Number.isFinite(n) && n > 0 && n <= 200),
+    )
+    .refine((arr) => arr.length > 0, "windows debe tener al menos un valor"),
+  days: z.coerce.number().min(1).max(2000).default(120),
+});
+
+const backfillSchema = z.object({
+  from: z.string().regex(dateKeyRegex),
+  to: z.string().regex(dateKeyRegex),
 });
 
 // ============================================================
@@ -185,6 +214,128 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return { success: true, data: snapshots.reverse() };
     },
   );
+
+  // ---- Daily rollup ----
+  // Devuelve las filas diarias del par en un rango. Sin `from/to`,
+  // devuelve los últimos `limit` días disponibles (asc por fecha).
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    "/api/pairs/:id/daily",
+    async (req, reply) => {
+      const query = dailyQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: query.error.format() });
+      }
+
+      const filter: Record<string, unknown> = { pairId: req.params.id };
+      if (query.data.from || query.data.to) {
+        const dateFilter: Record<string, unknown> = {};
+        if (query.data.from) dateFilter.$gte = query.data.from;
+        if (query.data.to) dateFilter.$lte = query.data.to;
+        filter.date = dateFilter;
+      }
+
+      const rows = await PairDailyModel.find(filter)
+        .sort({ date: -1 })
+        .limit(query.data.limit)
+        .lean();
+
+      return { success: true, data: rows.reverse() };
+    },
+  );
+
+  // Bandas "tipo Bollinger" construidas con promedios móviles de high/low.
+  // Devuelve la serie diaria con upperBand/lowerBand para cada `window`
+  // pedido. El cálculo de rolling se hace al vuelo — no se persiste.
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    "/api/pairs/:id/daily/bands",
+    async (req, reply) => {
+      const query = bandsQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: query.error.format() });
+      }
+
+      const pair = await BondPairModel.findById(req.params.id).lean();
+      if (!pair) {
+        return reply
+          .status(404)
+          .send({ success: false, error: "Par no encontrado" });
+      }
+
+      const windows = query.data.windows;
+      const maxWindow = Math.max(...windows);
+      // Pedimos suficientes filas para que la primer fila devuelta ya
+      // tenga `maxWindow` muestras previas disponibles.
+      const fetchCount = query.data.days + maxWindow - 1;
+
+      const rows = (await PairDailyModel.find({ pairId: req.params.id })
+        .sort({ date: -1 })
+        .limit(fetchCount)
+        .lean()) as PairDaily[];
+
+      const asc = rows.reverse();
+
+      const bands: PairDailyBands[] = windows.map((w) => ({
+        pairId: req.params.id,
+        pairName: pair.name,
+        window: w,
+        series: asc.map((row, i) => {
+          const start = i - w + 1;
+          if (start < 0) {
+            return {
+              date: row.date,
+              high: row.high,
+              low: row.low,
+              close: row.close,
+              upperBand: null,
+              lowerBand: null,
+            };
+          }
+          let sumH = 0;
+          let sumL = 0;
+          for (let k = start; k <= i; k++) {
+            sumH += asc[k].high;
+            sumL += asc[k].low;
+          }
+          return {
+            date: row.date,
+            high: row.high,
+            low: row.low,
+            close: row.close,
+            upperBand: sumH / w,
+            lowerBand: sumL / w,
+          };
+        }),
+      }));
+
+      // Recortamos a los últimos `days` para que el cliente no tenga que
+      // descartar las filas iniciales con bandas null.
+      for (const b of bands) {
+        if (b.series.length > query.data.days) {
+          b.series = b.series.slice(b.series.length - query.data.days);
+        }
+      }
+
+      return { success: true, data: bands };
+    },
+  );
+
+  // Dispara un backfill manual del rollup para un rango de fechas.
+  // Útil después de cambiar warmupMinutes/cooldownMinutes.
+  app.post("/api/daily/backfill", async (req, reply) => {
+    const parsed = backfillSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ success: false, error: parsed.error.format() });
+    }
+
+    await dailyRollupService.backfillRange(parsed.data.from, parsed.data.to);
+    return { success: true };
+  });
 
   // ---- Alerts CRUD ----
   app.get("/api/alerts", async () => {

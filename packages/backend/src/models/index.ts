@@ -7,7 +7,17 @@ import type {
   BondSnapshot,
   AlertConfig,
   OHLCV,
+  PairDaily,
+  SessionPhase,
 } from "@arbitraje/shared";
+
+const SESSION_PHASES: SessionPhase[] = [
+  "pre_open",
+  "warmup",
+  "regular",
+  "cooldown",
+  "post_close",
+];
 
 // ============================================================
 // Tick - datos crudos del mercado (snapshots cada N segundos)
@@ -110,11 +120,18 @@ const pairSnapshotSchema = new Schema<PairSnapshotDoc>(
     spread: { type: Number, required: true },
     volumeA: { type: Number, default: 0 },
     volumeB: { type: Number, default: 0 },
+    sessionPhase: {
+      type: String,
+      enum: SESSION_PHASES,
+      required: true,
+      index: true,
+    },
   },
   { timestamps: false },
 );
 
 pairSnapshotSchema.index({ pairId: 1, timestamp: -1 });
+pairSnapshotSchema.index({ pairId: 1, sessionPhase: 1, timestamp: -1 });
 
 export const PairSnapshotModel = mongoose.model<PairSnapshotDoc>(
   "PairSnapshot",
@@ -139,6 +156,12 @@ const bondSnapshotSchema = new Schema<BondSnapshotDoc>(
     volumeNominal: { type: Number, default: 0 },
     volumeInter: { type: Number, default: 0 },
     raw: { type: Object, required: true },
+    sessionPhase: {
+      type: String,
+      enum: SESSION_PHASES,
+      required: true,
+      index: true,
+    },
   },
   { timestamps: false },
 );
@@ -182,6 +205,36 @@ export const OHLCVModel = mongoose.model<OHLCVDoc>(
   "OHLCV",
   ohlcvSchema,
   "ohlcv",
+);
+
+// ============================================================
+// PairDaily - rollup diario del par (sólo fase 'regular')
+// ============================================================
+interface PairDailyDoc extends PairDaily, Document {}
+
+const pairDailySchema = new Schema<PairDailyDoc>(
+  {
+    pairId: { type: String, required: true },
+    pairName: { type: String, required: true },
+    date: { type: String, required: true }, // "YYYY-MM-DD" en timezone del mercado
+    high: { type: Number, required: true },
+    low: { type: Number, required: true },
+    close: { type: Number, required: true },
+    vwap: { type: Number, required: true },
+    stdDev: { type: Number, default: 0 },
+    sampleCount: { type: Number, required: true },
+    firstRegularTs: { type: Date, required: true },
+    lastRegularTs: { type: Date, required: true },
+  },
+  { timestamps: true },
+);
+
+pairDailySchema.index({ pairId: 1, date: -1 }, { unique: true });
+
+export const PairDailyModel = mongoose.model<PairDailyDoc>(
+  "PairDaily",
+  pairDailySchema,
+  "pair_daily",
 );
 
 // ============================================================

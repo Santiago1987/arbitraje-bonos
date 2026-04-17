@@ -13,6 +13,22 @@ const envSchema = z.object({
   SNAPSHOT_INTERVAL_MS: z.coerce.number().default(60_000),
   ALERT_COOLDOWN_MS: z.coerce.number().default(60_000),
 
+  // --- Sesión de mercado ---
+  SESSION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
+  SESSION_OPEN_TIME: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .default("10:30"),
+  SESSION_CLOSE_TIME: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .default("17:00"),
+  SESSION_WARMUP_MINUTES: z.coerce.number().min(0).default(10),
+  SESSION_COOLDOWN_MINUTES: z.coerce.number().min(0).default(10),
+
+  // --- Daily rollup ---
+  DAILY_ROLLUP_INTERVAL_MS: z.coerce.number().default(5 * 60_000),
+
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),

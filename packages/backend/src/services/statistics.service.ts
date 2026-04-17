@@ -29,11 +29,15 @@ class StatisticsService {
 
     const since = new Date(Date.now() - WINDOW_MS[window]);
 
-    // Usamos aggregation pipeline para eficiencia
+    // Usamos aggregation pipeline para eficiencia.
+    // Ignoramos warmup/cooldown/pre_open/post_close: los primeros y últimos
+    // minutos de la rueda son ruidosos en mercados chicos y distorsionan los
+    // promedios (ver CLAUDE.md / decisión de sesión).
     const [result] = await PairSnapshotModel.aggregate([
       {
         $match: {
           pairId,
+          sessionPhase: "regular",
           timestamp: { $gte: since },
         },
       },

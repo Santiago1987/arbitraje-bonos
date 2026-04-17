@@ -8,6 +8,7 @@ import {
 import { marketDataService } from "./market-data.service.js";
 import { eventBus } from "./event-bus.js";
 import { logger } from "../utils/logger.js";
+import { getSessionPhase } from "../utils/session.js";
 
 /**
  * SnapshotService
@@ -57,6 +58,7 @@ class SnapshotService {
       );
 
       const now = new Date();
+      const sessionPhase = getSessionPhase(now);
       const pairOperations = [];
       const bondOperations = [];
       const activeBondTickers = new Set(activeBondByFullTicker.keys());
@@ -85,6 +87,7 @@ class SnapshotService {
               spread: priceA - priceB,
               volumeA: latestA ? parseFloat(latestA.data.vol_nom) || 0 : 0,
               volumeB: latestB ? parseFloat(latestB.data.vol_nom) || 0 : 0,
+              sessionPhase,
             },
           },
         });
@@ -116,6 +119,7 @@ class SnapshotService {
               volumeNominal: parseFloat(latest.data.vol_nom) || 0,
               volumeInter: parseFloat(latest.data.vol_inter) || 0,
               raw: latest.data,
+              sessionPhase,
             },
           },
         });

@@ -9,6 +9,7 @@ import { registerRoutes } from "./routes/index.js";
 import { wsServer } from "./websocket/ws-server.js";
 import { pairCalculatorService } from "./services/pair-calculator.service.js";
 import { snapshotService } from "./services/snapshot.service.js";
+import { dailyRollupService } from "./services/daily-rollup.service.js";
 import { alertEngine } from "./services/alert-engine.service.js";
 import { bymaConnector } from "./services/byma-connector.service.js";
 
@@ -41,6 +42,7 @@ async function bootstrap() {
   await pairCalculatorService.init();
   await alertEngine.init();
   snapshotService.start();
+  dailyRollupService.start();
 
   // El conector BYMA ya NO se inicia automáticamente.
   // La conexión es manual via POST /api/byma/connect desde el frontend.
@@ -54,6 +56,7 @@ async function bootstrap() {
     logger.info(`${signal} recibido, cerrando...`);
     bymaConnector.disconnect();
     snapshotService.stop();
+    dailyRollupService.stop();
     await app.close();
     await mongoose.disconnect();
     logger.info("Servidor cerrado");

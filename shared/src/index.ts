@@ -75,6 +75,19 @@ export interface PairLiveData {
   timestamp: Date;
 }
 
+// --- Fases de la rueda ---
+// pre_open: antes de la apertura (subasta / pre-mercado)
+// warmup:   primeros N minutos (ignorar en stats)
+// regular:  rueda normal (se usa en stats)
+// cooldown: últimos N minutos (ignorar en stats; útil para detectar intervenciones)
+// post_close: después del cierre
+export type SessionPhase =
+  | "pre_open"
+  | "warmup"
+  | "regular"
+  | "cooldown"
+  | "post_close";
+
 // --- Snapshots (lo que se persiste cada N segundos) ---
 
 export interface PairSnapshot {
@@ -86,6 +99,7 @@ export interface PairSnapshot {
   spread: number;
   volumeA: number;
   volumeB: number;
+  sessionPhase: SessionPhase;
 }
 
 export interface BondSnapshot {
@@ -99,6 +113,40 @@ export interface BondSnapshot {
   volumeNominal: number;
   volumeInter: number;
   raw: RawTickData;
+  sessionPhase: SessionPhase;
+}
+
+// --- Rollup diario del par (sólo fase 'regular') ---
+
+export interface PairDaily {
+  pairId: string;
+  pairName: string;
+  date: string; // "YYYY-MM-DD" en la timezone del mercado
+  high: number;
+  low: number;
+  close: number;
+  vwap: number; // promedio ponderado por volumen del ratio
+  stdDev: number;
+  sampleCount: number;
+  firstRegularTs: Date;
+  lastRegularTs: Date;
+}
+
+// Banda "tipo Bollinger" construida con promedios móviles de high/low.
+// upper[i] = promedio de `high` en los últimos N días hasta daily[i]
+// lower[i] = promedio de `low`  en los últimos N días hasta daily[i]
+export interface PairDailyBands {
+  pairId: string;
+  pairName: string;
+  window: number; // ej: 5, 10, 20
+  series: Array<{
+    date: string;
+    high: number;
+    low: number;
+    close: number;
+    upperBand: number | null; // null hasta que haya `window` muestras
+    lowerBand: number | null;
+  }>;
 }
 
 // --- OHLCV agregado ---
