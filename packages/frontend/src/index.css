@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface-0 text-gray-100 font-sans antialiased;
+  }
+
+  /* Scrollbar estilo financiero */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-surface-0;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-3 rounded-full;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-1 border border-surface-3/30;
+  }
+
+  .stat-positive {
+    @apply text-accent-green;
+  }
+
+  .stat-negative {
+    @apply text-accent-red;
+  }
+
+  .stat-neutral {
+    @apply text-muted;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-accent-green/10 text-accent-green;
+  }
+
+  .badge-red {
+    @apply badge bg-accent-red/10 text-accent-red;
+  }
+
+  .badge-blue {
+    @apply badge bg-accent-blue/10 text-accent-blue;
+  }
+}

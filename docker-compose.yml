@@ -1,0 +1,22 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: arbitraje-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  # Descomentar cuando quieras correr el backend en Docker
+  # backend:
+  #   build: ./packages/backend
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     - MONGO_URI=mongodb://mongo:27017/arbitraje-bonos
+  #   depends_on:
+  #     - mongo
+
+volumes:
+  mongo_data:
