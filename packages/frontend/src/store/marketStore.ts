@@ -21,6 +21,9 @@ interface MarketState {
   stats: Record<string, PairStatistics>;
   selectedWindow: StatsWindow;
 
+  // Par seleccionado (para vista de gráfico, etc.)
+  selectedPairId: string | null;
+
   // Alertas recientes (buffer circular)
   recentAlerts: AlertEvent[];
 
@@ -45,6 +48,8 @@ interface MarketState {
   clearAlerts: () => void;
 
   setWsStatus: (status: WSStatus) => void;
+
+  setSelectedPairId: (pairId: string | null) => void;
 }
 
 const MAX_ALERTS = 20;
@@ -55,6 +60,7 @@ export const useMarketStore = create<MarketState>()(
     liveData: {},
     stats: {},
     selectedWindow: "1m",
+    selectedPairId: null,
     recentAlerts: [],
     wsStatus: "idle",
     pairsLoading: false,
@@ -108,6 +114,11 @@ export const useMarketStore = create<MarketState>()(
     setWsStatus: (status) =>
       set((state) => {
         state.wsStatus = status;
+      }),
+
+    setSelectedPairId: (pairId) =>
+      set((state) => {
+        state.selectedPairId = pairId;
       }),
   })),
 );

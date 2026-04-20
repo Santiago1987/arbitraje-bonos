@@ -119,13 +119,19 @@ const PairRow = ({ pair }: PairRowProps) => {
   // Selectores granulares: esta fila solo re-renderiza cuando cambia SU par
   const live = useMarketStore(selectLiveByPair(pair.id));
   const stats = useMarketStore(selectStatsByPair(pair.id));
+  const isSelected = useMarketStore((s) => s.selectedPairId === pair.id);
+  const setSelectedPairId = useMarketStore((s) => s.setSelectedPairId);
 
   return (
     <tr>
       <div className="grid grid-cols-6 gap-1">
         <div
+          onClick={() => setSelectedPairId(pair.id)}
           className={clsx(
-            "card p-1 grid grid-cols-2 bg-surface-1/40 border-b border-surface-3/20 hover:bg-surface-2/50 transition-colors cursor-pointer",
+            "card p-1 grid grid-cols-2 border-b border-surface-3/20 hover:bg-surface-2/50 transition-colors cursor-pointer",
+            isSelected
+              ? "bg-accent-blue/10 ring-1 ring-accent-blue/40"
+              : "bg-surface-1/40",
           )}
         >
           <div className="flex items-center justify-center font-semibold text-center text-base font-mono">

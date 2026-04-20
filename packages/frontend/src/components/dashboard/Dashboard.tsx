@@ -4,6 +4,7 @@ import BYMAModal from "./BYMAModal";
 import Header from "./Header";
 import Alerts from "./Alerts";
 import BondsTable from "./BondsTable";
+import RatioChart from "./RatioChart";
 
 export function Dashboard() {
   const pairs = useMarketStore((s) => s.pairs);
@@ -21,6 +22,7 @@ export function Dashboard() {
       <Header handleOnClickBymaModal={handleOnClickBymaModal} />
       {alerts.length > 0 && <Alerts alerts={alerts} />}
       <BondsTable loading={loading} pairs={pairs} />
+      <RatioChart />
       {showBymaModal && (
         <BYMAModal handleOnClickBymaModal={handleOnClickBymaModal} />
       )}
