@@ -4,3 +4,5 @@ dist/
 *.log
 .DS_Store
 .vite/
+byma-connector.service.ts
+CLAUDE.md
