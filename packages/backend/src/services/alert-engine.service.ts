@@ -1,8 +1,29 @@
-import type { AlertConfig, AlertEvent, PairLiveData } from '@arbitraje/shared';
+import type {
+  AlertConfig,
+  AlertEvent,
+  AlertField,
+  PairLiveData,
+} from '@arbitraje/shared';
 import { AlertConfigModel } from '../models/index.js';
 import { eventBus } from './event-bus.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+
+function extractFieldValue(
+  field: AlertField,
+  liveData: PairLiveData,
+): number {
+  switch (field) {
+    case 'ratio':
+      return liveData.currentRatio;
+    case 'spread':
+      return liveData.priceA - liveData.priceB;
+    case 'priceA':
+      return liveData.priceA;
+    case 'priceB':
+      return liveData.priceB;
+  }
+}
 
 /**
  * AlertEngine
@@ -17,7 +38,9 @@ class AlertEngine {
   // Cooldown: alertId -> timestamp del último disparo
   private cooldowns = new Map<string, number>();
 
-  // Valores anteriores para detectar cruces (cross_above/cross_below)
+  // Valores anteriores para detectar cruces (cross_above/cross_below).
+  // Indexado por `${pairId}:${field}` porque distintas alertas del mismo
+  // par pueden mirar campos distintos (ratio, spread, priceA, priceB).
   private previousValues = new Map<string, number>();
 
   async init(): Promise<void> {
@@ -38,6 +61,7 @@ class AlertEngine {
         id: alert._id.toString(),
         pairId: alert.pairId,
         pairName: alert.pairName,
+        field: alert.field ?? 'ratio',
         condition: alert.condition,
         threshold: alert.threshold,
         message: alert.message,
@@ -60,12 +84,21 @@ class AlertEngine {
       const alerts = this.alertsByPair.get(liveData.pairId);
       if (!alerts || alerts.length === 0) return;
 
+      // Trackeamos un valor previo distinto por field para que los cruces
+      // funcionen aun si hay alertas mirando campos distintos del mismo par.
+      const seenFields = new Set<AlertField>();
+
       for (const alert of alerts) {
         this.evaluate(alert, liveData);
+        seenFields.add(alert.field);
       }
 
-      // Guardamos el valor actual para detectar cruces en el próximo tick
-      this.previousValues.set(liveData.pairId, liveData.currentRatio);
+      for (const field of seenFields) {
+        this.previousValues.set(
+          `${liveData.pairId}:${field}`,
+          extractFieldValue(field, liveData),
+        );
+      }
     });
   }
 
@@ -73,51 +106,57 @@ class AlertEngine {
    * Evalúa si una alerta debe dispararse.
    */
   private evaluate(alert: AlertConfig, liveData: PairLiveData): void {
-    const { currentRatio } = liveData;
+    const value = extractFieldValue(alert.field, liveData);
     const { threshold, condition } = alert;
+    const prevKey = `${liveData.pairId}:${alert.field}`;
     let shouldTrigger = false;
 
     switch (condition) {
       case 'above':
-        shouldTrigger = currentRatio > threshold;
+        shouldTrigger = value > threshold;
         break;
 
       case 'below':
-        shouldTrigger = currentRatio < threshold;
+        shouldTrigger = value < threshold;
         break;
 
       case 'cross_above': {
-        const prev = this.previousValues.get(liveData.pairId);
-        shouldTrigger = prev !== undefined && prev <= threshold && currentRatio > threshold;
+        const prev = this.previousValues.get(prevKey);
+        shouldTrigger = prev !== undefined && prev <= threshold && value > threshold;
         break;
       }
 
       case 'cross_below': {
-        const prev = this.previousValues.get(liveData.pairId);
-        shouldTrigger = prev !== undefined && prev >= threshold && currentRatio < threshold;
+        const prev = this.previousValues.get(prevKey);
+        shouldTrigger = prev !== undefined && prev >= threshold && value < threshold;
         break;
       }
     }
 
     if (shouldTrigger && !this.isInCooldown(alert.id)) {
-      this.trigger(alert, liveData);
+      this.trigger(alert, liveData, value);
     }
   }
 
   /**
    * Dispara una alerta.
    */
-  private trigger(alert: AlertConfig, liveData: PairLiveData): void {
+  private trigger(
+    alert: AlertConfig,
+    liveData: PairLiveData,
+    currentValue: number,
+  ): void {
     const event: AlertEvent = {
       alertId: alert.id,
       pairId: alert.pairId,
       pairName: alert.pairName,
+      field: alert.field,
       condition: alert.condition,
       threshold: alert.threshold,
-      currentValue: liveData.currentRatio,
+      currentValue,
       message:
         alert.message ??
-        `${alert.pairName}: ratio ${liveData.currentRatio.toFixed(4)} ${alert.condition} ${alert.threshold}`,
+        `${alert.pairName}: ${alert.field} ${currentValue.toFixed(4)} ${alert.condition} ${alert.threshold}`,
       timestamp: new Date(),
     };
 

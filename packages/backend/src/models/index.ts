@@ -246,6 +246,12 @@ const alertConfigSchema = new Schema<AlertConfigDoc>(
   {
     pairId: { type: String, required: true, index: true },
     pairName: { type: String, required: true },
+    field: {
+      type: String,
+      enum: ["ratio", "spread", "priceA", "priceB"],
+      default: "ratio",
+      required: true,
+    },
     condition: {
       type: String,
       enum: ["above", "below", "cross_above", "cross_below"],

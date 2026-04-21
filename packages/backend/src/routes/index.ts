@@ -32,6 +32,7 @@ const statsWindowSchema = z.enum(["1w", "2w", "1m", "3m", "6m", "1y"]);
 
 const createAlertSchema = z.object({
   pairId: z.string().min(1),
+  field: z.enum(["ratio", "spread", "priceA", "priceB"]).default("ratio"),
   condition: z.enum(["above", "below", "cross_above", "cross_below"]),
   threshold: z.number(),
   message: z.string().optional(),

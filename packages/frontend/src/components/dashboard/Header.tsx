@@ -12,12 +12,7 @@ const Header = ({ handleOnClickBymaModal }: Props) => {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Arbitraje de Bonos
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Ratios en tiempo real y estadísticas históricas
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">DASHBOARD</h1>
       </div>
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 text-sm">

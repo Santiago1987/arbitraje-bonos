@@ -190,11 +190,13 @@ export interface PairStatistics {
 
 export type AlertCondition = "above" | "below" | "cross_above" | "cross_below";
 export type AlertStatus = "active" | "triggered" | "disabled";
+export type AlertField = "ratio" | "spread" | "priceA" | "priceB";
 
 export interface AlertConfig {
   id: string;
   pairId: string;
   pairName: string;
+  field: AlertField;
   condition: AlertCondition;
   threshold: number;
   message?: string;
@@ -207,6 +209,7 @@ export interface AlertEvent {
   alertId: string;
   pairId: string;
   pairName: string;
+  field: AlertField;
   condition: AlertCondition;
   threshold: number;
   currentValue: number;

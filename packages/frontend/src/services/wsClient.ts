@@ -1,5 +1,6 @@
 import type { WSMessage, PairLiveData, AlertEvent } from "@arbitraje/shared";
 import { useMarketStore } from "../store/marketStore";
+import { playAlertSound } from "./sound";
 
 /**
  * Cliente WebSocket singleton.
@@ -42,6 +43,7 @@ function handleMessage(event: MessageEvent) {
       break;
     case "alert_triggered":
       store.addAlert(msg.payload as AlertEvent);
+      playAlertSound();
       break;
     case "heartbeat":
       send({ type: "heartbeat", payload: {}, timestamp: new Date() });

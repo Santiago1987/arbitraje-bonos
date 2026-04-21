@@ -4,7 +4,12 @@
       "Bash(npx tsc:*)",
       "Bash(./node_modules/.bin/tsc --noEmit)",
       "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/typescript/bin/tsc --noEmit --project /e/Proyectos/arbitraje-bonos/packages/backend/tsconfig.json)",
-      "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/typescript/bin/tsc --noEmit --module ESNext --moduleResolution bundler --target ES2022 --strict --esModuleInterop --skipLibCheck --resolveJsonModule src/index.ts src/config/index.ts src/utils/session.ts src/models/index.ts src/services/snapshot.service.ts src/services/daily-rollup.service.ts src/services/statistics.service.ts src/routes/index.ts)"
+      "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/typescript/bin/tsc --noEmit --module ESNext --moduleResolution bundler --target ES2022 --strict --esModuleInterop --skipLibCheck --resolveJsonModule src/index.ts src/config/index.ts src/utils/session.ts src/models/index.ts src/services/snapshot.service.ts src/services/daily-rollup.service.ts src/services/statistics.service.ts src/routes/index.ts)",
+      "Bash(pnpm -r exec tsc --noEmit)",
+      "Bash(pnpm --filter backend exec tsc --noEmit)",
+      "Bash(npx -p typescript@5.5 tsc --noEmit -p tsconfig.json)",
+      "Bash(./node_modules/.bin/tsc --version)",
+      "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.check.json)"
     ]
   }
 }

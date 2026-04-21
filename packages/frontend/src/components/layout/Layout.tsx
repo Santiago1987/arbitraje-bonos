@@ -1,27 +1,27 @@
-import { NavLink, Outlet } from 'react-router-dom';
-import { clsx } from 'clsx';
+import { NavLink, Outlet } from "react-router-dom";
+import { clsx } from "clsx";
 import {
   LayoutDashboard,
   LineChart,
   Bell,
   Settings,
   Activity,
-} from 'lucide-react';
+} from "lucide-react";
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/charts', icon: LineChart, label: 'Gráficos' },
-  { to: '/alerts', icon: Bell, label: 'Alertas' },
-  { to: '/settings', icon: Settings, label: 'Configuración' },
+  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/charts", icon: LineChart, label: "Gráficos" },
+  { to: "/alerts", icon: Bell, label: "Alertas" },
+  { to: "/settings", icon: Settings, label: "Configuración" },
 ];
 
 export function Layout() {
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex flex-col">
       {/* Sidebar */}
-      <aside className="w-16 lg:w-56 bg-surface-1 border-r border-surface-3/30 flex flex-col shrink-0">
+      <aside className="w-full h-16 bg-surface-1 border-r border-surface-3/30 flex shrink-0">
         {/* Logo */}
-        <div className="h-16 flex items-center gap-3 px-4 border-b border-surface-3/30">
+        <div className="flex items-center gap-3 px-4 border-b border-surface-3/30">
           <Activity className="w-6 h-6 text-accent-cyan shrink-0" />
           <span className="font-bold text-lg hidden lg:block tracking-tight">
             ArbBonos
@@ -29,18 +29,18 @@ export function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-4 px-2 space-y-1">
+        <nav className="flex w-full py-4 px-2 space-y-1">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
+              end={item.to === "/"}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm',
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm",
                   isActive
-                    ? 'bg-accent-blue/10 text-accent-blue'
-                    : 'text-muted hover:text-white hover:bg-surface-2'
+                    ? "bg-accent-blue/10 text-accent-blue"
+                    : "text-muted hover:text-white hover:bg-surface-2",
                 )
               }
             >
@@ -51,7 +51,7 @@ export function Layout() {
         </nav>
 
         {/* Footer */}
-        <div className="p-4 border-t border-surface-3/30">
+        <div className="p-4 h-16 border-t border-surface-3/30">
           <div className="text-xs text-muted hidden lg:block">
             Arbitraje Bonos v1.0
           </div>
@@ -60,7 +60,7 @@ export function Layout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="w-full mx-auto">
           <Outlet />
         </div>
       </main>

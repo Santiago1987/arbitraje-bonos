@@ -5,18 +5,19 @@ import type {
   PairStatistics,
   PairSnapshot,
   AlertConfig,
+  AlertCondition,
+  AlertField,
   StatsWindow,
 } from "@arbitraje/shared";
 
-const BASE = "http://localhost:5173/api";
+const BASE = "http://localhost:3001/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const hasBody = options?.body != null;
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: hasBody ? { "Content-Type": "application/json" } : {},
     ...options,
   });
-
-  console.log("response", res);
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
@@ -109,7 +110,8 @@ export async function fetchAlerts(): Promise<AlertConfig[]> {
 
 export async function createAlert(alert: {
   pairId: string;
-  condition: string;
+  field: AlertField;
+  condition: AlertCondition;
   threshold: number;
   message?: string;
 }): Promise<AlertConfig> {

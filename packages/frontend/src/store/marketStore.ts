@@ -5,6 +5,7 @@ import type {
   PairLiveData,
   PairStatistics,
   AlertEvent,
+  AlertConfig,
   StatsWindow,
 } from "@arbitraje/shared";
 
@@ -27,6 +28,9 @@ interface MarketState {
   // Alertas recientes (buffer circular)
   recentAlerts: AlertEvent[];
 
+  // Alertas configuradas (persistidas en backend)
+  alertConfigs: AlertConfig[];
+
   // Conexión
   wsStatus: WSStatus;
 
@@ -45,7 +49,12 @@ interface MarketState {
   setSelectedWindow: (window: StatsWindow) => void;
 
   addAlert: (alert: AlertEvent) => void;
+  removeAlert: (alertId: string, timestamp: Date | string) => void;
   clearAlerts: () => void;
+
+  setAlertConfigs: (configs: AlertConfig[]) => void;
+  upsertAlertConfig: (config: AlertConfig) => void;
+  removeAlertConfig: (id: string) => void;
 
   setWsStatus: (status: WSStatus) => void;
 
@@ -62,6 +71,7 @@ export const useMarketStore = create<MarketState>()(
     selectedWindow: "1m",
     selectedPairId: null,
     recentAlerts: [],
+    alertConfigs: [],
     wsStatus: "idle",
     pairsLoading: false,
     pairsError: null,
@@ -100,15 +110,43 @@ export const useMarketStore = create<MarketState>()(
 
     addAlert: (alert) =>
       set((state) => {
+        if (state.recentAlerts.find((al) => al.alertId === alert.alertId))
+          return;
         state.recentAlerts.unshift(alert);
         if (state.recentAlerts.length > MAX_ALERTS) {
           state.recentAlerts.length = MAX_ALERTS;
         }
       }),
 
+    removeAlert: (alertId, timestamp) =>
+      set((state) => {
+        const ts = new Date(timestamp).getTime();
+        state.recentAlerts = state.recentAlerts.filter(
+          (a) =>
+            !(a.alertId === alertId && new Date(a.timestamp).getTime() === ts),
+        );
+      }),
+
     clearAlerts: () =>
       set((state) => {
         state.recentAlerts = [];
+      }),
+
+    setAlertConfigs: (configs) =>
+      set((state) => {
+        state.alertConfigs = configs;
+      }),
+
+    upsertAlertConfig: (config) =>
+      set((state) => {
+        const idx = state.alertConfigs.findIndex((a) => a.id === config.id);
+        if (idx >= 0) state.alertConfigs[idx] = config;
+        else state.alertConfigs.unshift(config);
+      }),
+
+    removeAlertConfig: (id) =>
+      set((state) => {
+        state.alertConfigs = state.alertConfigs.filter((a) => a.id !== id);
       }),
 
     setWsStatus: (status) =>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   createChart,
@@ -6,6 +6,7 @@ import {
   LineStyle,
   type CandlestickData,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type LineData,
   type UTCTimestamp,
@@ -48,10 +49,8 @@ const getSessionRange = (refMs: number = Date.now()) => {
   const y = art.getUTCFullYear();
   const m = art.getUTCMonth();
   const d = art.getUTCDate();
-  const from =
-    Date.UTC(y, m, d, SESSION_OPEN_UTC_H, SESSION_OPEN_UTC_M) / 1000;
-  const to =
-    Date.UTC(y, m, d, SESSION_CLOSE_UTC_H, SESSION_CLOSE_UTC_M) / 1000;
+  const from = Date.UTC(y, m, d, SESSION_OPEN_UTC_H, SESSION_OPEN_UTC_M) / 1000;
+  const to = Date.UTC(y, m, d, SESSION_CLOSE_UTC_H, SESSION_CLOSE_UTC_M) / 1000;
   return { from: from as UTCTimestamp, to: to as UTCTimestamp };
 };
 
@@ -74,6 +73,18 @@ const RatioChart = () => {
   const live = useMarketStore((s) =>
     selectedPairId ? s.liveData[selectedPairId] : undefined,
   );
+  const alertConfigs = useMarketStore((s) => s.alertConfigs);
+  const pairAlertConfigs = useMemo(
+    () =>
+      alertConfigs.filter(
+        (a) =>
+          a.pairId === selectedPairId &&
+          a.field === "ratio" &&
+          a.status !== "disabled" &&
+          Number.isFinite(a.threshold),
+      ),
+    [alertConfigs, selectedPairId],
+  );
 
   const [mode, setMode] = useState<ChartMode>("candles");
 
@@ -82,6 +93,7 @@ const RatioChart = () => {
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const candlesRef = useRef<Map<number, Candle>>(new Map());
+  const priceLinesRef = useRef<IPriceLine[]>([]);
   const sessionRangeRef = useRef(getSessionRange());
   const currentPairIdRef = useRef<string | null>(null);
 
@@ -205,6 +217,36 @@ const RatioChart = () => {
     chart.timeScale().setVisibleRange(sessionRangeRef.current);
   }, [mode]);
 
+  // Pintar alertas configuradas sobre el ratio como líneas horizontales
+  // punteadas amarillas. Se re-sincroniza al cambiar de par, de modo de vista
+  // (que recrea la serie) o al altas/bajas/ediciones de alertas.
+  useEffect(() => {
+    const series =
+      mode === "candles" ? candleSeriesRef.current : lineSeriesRef.current;
+    if (!series) return;
+
+    for (const pl of priceLinesRef.current) {
+      series.removePriceLine(pl);
+    }
+    priceLinesRef.current = [];
+
+    for (const cfg of pairAlertConfigs) {
+      const arrow =
+        cfg.condition === "above" || cfg.condition === "cross_above"
+          ? "▲"
+          : "▼";
+      const pl = series.createPriceLine({
+        price: cfg.threshold,
+        color: "#eab308",
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: `${arrow} ${cfg.threshold.toFixed(5)}`,
+      });
+      priceLinesRef.current.push(pl);
+    }
+  }, [pairAlertConfigs, mode]);
+
   // Limpiar buffer, re-anclar la rueda y sembrar velas desde historial al
   // cambiar de par. Previene el flicker al recargar / cambiar de ratio.
   useEffect(() => {
@@ -286,7 +328,7 @@ const RatioChart = () => {
   }, [live, selectedPairId, mode]);
 
   return (
-    <div className="border border-surface-3/30 rounded-lg p-4 mt-4">
+    <div className="border border-surface-3/30 rounded-lg p-2 mt-2">
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted">
