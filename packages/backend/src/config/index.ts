@@ -10,7 +10,7 @@ const envSchema = z.object({
   BYMA_RECONNECT_MAX_RETRIES: z.coerce.number().default(10),
   BYMA_RECONNECT_BASE_DELAY_MS: z.coerce.number().default(1000),
 
-  SNAPSHOT_INTERVAL_MS: z.coerce.number().default(60_000),
+  SNAPSHOT_INTERVAL_MS: z.coerce.number().default(300_000),
   ALERT_COOLDOWN_MS: z.coerce.number().default(60_000),
 
   // --- Sesión de mercado ---
