@@ -115,7 +115,7 @@ const PairRow = ({ pair }: PairRowProps) => {
       <div
         onClick={() => setSelectedPairId(pair.id)}
         className={clsx(
-          "card p-1 grid grid-cols-2 border-b border-surface-3/20 hover:bg-surface-2/50 transition-colors cursor-pointer",
+          "card p-2 grid grid-cols-2 border-b border-surface-3/20 hover:bg-surface-2/50 transition-colors cursor-pointer",
           isSelected
             ? "bg-accent-blue/10 ring-1 ring-accent-blue/40"
             : "bg-surface-1/40",
