@@ -14,16 +14,9 @@ function ChartsPage() {
   return (
     <div className="text-muted text-center py-20">
       <p className="text-lg">Gráficos - Próximamente</p>
-      <p className="text-sm mt-2">Acá vas a ver los charts interactivos de cada par</p>
-    </div>
-  );
-}
-
-function AlertsPage() {
-  return (
-    <div className="text-muted text-center py-20">
-      <p className="text-lg">Alertas - Próximamente</p>
-      <p className="text-sm mt-2">Configuración y historial de alertas</p>
+      <p className="text-sm mt-2">
+        Acá vas a ver los charts interactivos de cada par
+      </p>
     </div>
   );
 }
@@ -95,7 +88,6 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="charts" element={<ChartsPage />} />
-          <Route path="alerts" element={<AlertsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
