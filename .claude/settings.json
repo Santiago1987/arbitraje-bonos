@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/.bin/tsc --noEmit -p tsconfig.check.json)"
+      "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/.bin/tsc --noEmit -p tsconfig.check.json)",
+      "Bash(pnpm exec *)"
     ]
   }
 }

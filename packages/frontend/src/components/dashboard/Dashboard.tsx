@@ -6,8 +6,9 @@ import Header from "./Header";
 import Alerts from "./Alerts";
 import BondsTable from "./BondsTable";
 import RatioChart from "./RatioChart";
-import RightSidebar from "./RightSidebar";
+import RightSidebar, { type ActivePanel } from "./RightSidebar";
 import AlertsPanel from "./AlertsPanel";
+import PairsPanel from "./PairsPanel";
 
 export function Dashboard() {
   const pairs = useMarketStore((s) => s.pairs);
@@ -16,7 +17,7 @@ export function Dashboard() {
   const setAlertConfigs = useMarketStore((s) => s.setAlertConfigs);
 
   const [showBymaModal, setShowBymaModal] = useState(false);
-  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
 
   useEffect(() => {
     fetchAlerts()
@@ -27,6 +28,9 @@ export function Dashboard() {
   const handleOnClickBymaModal = (show: boolean) => {
     setShowBymaModal(show);
   };
+
+  const togglePanel = (panel: Exclude<ActivePanel, null>) =>
+    setActivePanel((curr) => (curr === panel ? null : panel));
 
   return (
     <div className="relative flex h-full">
@@ -41,11 +45,19 @@ export function Dashboard() {
       </div>
 
       <RightSidebar
-        alertsOpen={alertsOpen}
-        onOpenAlerts={() => setAlertsOpen(true)}
+        activePanel={activePanel}
+        onOpenAlerts={() => togglePanel("alerts")}
+        onOpenPairs={() => togglePanel("pairs")}
       />
 
-      <AlertsPanel open={alertsOpen} onClose={() => setAlertsOpen(false)} />
+      <AlertsPanel
+        open={activePanel === "alerts"}
+        onClose={() => setActivePanel(null)}
+      />
+      <PairsPanel
+        open={activePanel === "pairs"}
+        onClose={() => setActivePanel(null)}
+      />
     </div>
   );
 }

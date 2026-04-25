@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  BondModel,
   BondPairModel,
   PairSnapshotModel,
   PairDailyModel,
@@ -84,6 +85,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     byma: bymaConnector.getStatus(),
     wsClients: wsServer.getClientCount(),
   }));
+
+  // ---- Bonds (read-only) ----
+  app.get("/api/bonds", async () => {
+    const bonds = await BondModel.find().sort({ ticker: 1 }).lean();
+    return {
+      success: true,
+      data: bonds.map((b) => ({ ...b, id: b._id.toString() })),
+    };
+  });
 
   // ---- Pairs CRUD ----
   app.get("/api/pairs", async () => {

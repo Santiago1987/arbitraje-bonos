@@ -1,5 +1,6 @@
 import type {
   ApiResponse,
+  Bond,
   BondPair,
   PairLiveData,
   PairStatistics,
@@ -25,6 +26,13 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   return res.json();
+}
+
+// ---- Bonds ----
+
+export async function fetchBonds(): Promise<Bond[]> {
+  const res = await request<ApiResponse<Bond[]>>("/bonds");
+  return res.data;
 }
 
 // ---- Pairs ----

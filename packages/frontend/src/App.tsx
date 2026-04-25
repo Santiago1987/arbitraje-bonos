@@ -4,7 +4,7 @@ import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./store/marketStore";
-import { fetchPairs } from "./services/api";
+import { fetchBonds, fetchPairs } from "./services/api";
 import { initWS, closeWS, subscribeToPairs } from "./services/wsClient";
 
 type LiveMap = Record<string, PairLiveData>;
@@ -40,8 +40,10 @@ function useBootstrap() {
       store.setPairsLoading(true);
       store.setPairsError(null);
       try {
-        const pairs = await fetchPairs();
+        const [pairs, bonds] = await Promise.all([fetchPairs(), fetchBonds()]);
         if (cancelled) return;
+
+        store.setBonds(bonds);
 
         const live: LiveMap = {};
         for (const p of pairs) {

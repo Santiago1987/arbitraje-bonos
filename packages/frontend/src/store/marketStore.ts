@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
 import type {
+  Bond,
   BondPair,
   PairLiveData,
   PairStatistics,
@@ -12,6 +13,9 @@ import type {
 export type WSStatus = "idle" | "connecting" | "connected" | "disconnected";
 
 interface MarketState {
+  // Catálogo de bonos (rara vez cambia)
+  bonds: Bond[];
+
   // Metadata (rara vez cambia)
   pairs: BondPair[];
 
@@ -39,9 +43,13 @@ interface MarketState {
   pairsError: string | null;
 
   // ---- Actions ----
+  setBonds: (bonds: Bond[]) => void;
+
   setPairs: (pairs: BondPair[], live?: Record<string, PairLiveData>) => void;
   setPairsLoading: (loading: boolean) => void;
   setPairsError: (error: string | null) => void;
+  addPair: (pair: BondPair) => void;
+  removePair: (id: string) => void;
 
   updateLive: (data: PairLiveData) => void;
 
@@ -65,6 +73,7 @@ const MAX_ALERTS = 20;
 
 export const useMarketStore = create<MarketState>()(
   immer((set) => ({
+    bonds: [],
     pairs: [],
     liveData: {},
     stats: {},
@@ -75,6 +84,11 @@ export const useMarketStore = create<MarketState>()(
     wsStatus: "idle",
     pairsLoading: false,
     pairsError: null,
+
+    setBonds: (bonds) =>
+      set((state) => {
+        state.bonds = bonds;
+      }),
 
     setPairs: (pairs, live) =>
       set((state) => {
@@ -90,6 +104,19 @@ export const useMarketStore = create<MarketState>()(
     setPairsError: (error) =>
       set((state) => {
         state.pairsError = error;
+      }),
+
+    addPair: (pair) =>
+      set((state) => {
+        const idx = state.pairs.findIndex((p) => p.id === pair.id);
+        if (idx >= 0) state.pairs[idx] = pair;
+        else state.pairs.push(pair);
+      }),
+
+    removePair: (id) =>
+      set((state) => {
+        state.pairs = state.pairs.filter((p) => p.id !== id);
+        delete state.liveData[id];
       }),
 
     updateLive: (data) =>
