@@ -24,6 +24,20 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
         sans: ['DM Sans', 'system-ui', 'sans-serif'],
       },
+      keyframes: {
+        'flash-green': {
+          '0%, 50%': { backgroundColor: 'rgba(34, 197, 94, 0.45)' },
+          '100%': { backgroundColor: 'transparent' },
+        },
+        'flash-red': {
+          '0%, 50%': { backgroundColor: 'rgba(239, 68, 68, 0.45)' },
+          '100%': { backgroundColor: 'transparent' },
+        },
+      },
+      animation: {
+        'flash-green': 'flash-green 700ms ease-out',
+        'flash-red': 'flash-red 700ms ease-out',
+      },
     },
   },
   plugins: [],

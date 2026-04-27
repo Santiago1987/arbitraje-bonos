@@ -5,6 +5,7 @@ import type {
   BondPair,
   PairLiveData,
   PairStatistics,
+  PairSummary,
   AlertEvent,
   AlertConfig,
   StatsWindow,
@@ -25,6 +26,9 @@ interface MarketState {
   // Baja frecuencia — indexado por pairId
   stats: Record<string, PairStatistics>;
   selectedWindow: StatsWindow;
+
+  // Referencias por par (avg/min/max) — se calcula 1× por rueda
+  summary: Record<string, PairSummary>;
 
   // Par seleccionado (para vista de gráfico, etc.)
   selectedPairId: string | null;
@@ -56,6 +60,8 @@ interface MarketState {
   setStats: (stats: PairStatistics[]) => void;
   setSelectedWindow: (window: StatsWindow) => void;
 
+  setSummaries: (summaries: PairSummary[]) => void;
+
   addAlert: (alert: AlertEvent) => void;
   removeAlert: (alertId: string, timestamp: Date | string) => void;
   clearAlerts: () => void;
@@ -77,6 +83,7 @@ export const useMarketStore = create<MarketState>()(
     pairs: [],
     liveData: {},
     stats: {},
+    summary: {},
     selectedWindow: "1m",
     selectedPairId: null,
     recentAlerts: [],
@@ -133,6 +140,12 @@ export const useMarketStore = create<MarketState>()(
     setSelectedWindow: (window) =>
       set((state) => {
         state.selectedWindow = window;
+      }),
+
+    setSummaries: (summaries) =>
+      set((state) => {
+        state.summary = {};
+        for (const s of summaries) state.summary[s.pairId] = s;
       }),
 
     addAlert: (alert) =>
@@ -195,6 +208,9 @@ export const selectLiveByPair = (pairId: string) => (state: MarketState) =>
 
 export const selectStatsByPair = (pairId: string) => (state: MarketState) =>
   state.stats[pairId];
+
+export const selectSummaryByPair = (pairId: string) => (state: MarketState) =>
+  state.summary[pairId];
 
 export const selectIsConnected = (state: MarketState) =>
   state.wsStatus === "connected";

@@ -186,6 +186,24 @@ export interface PairStatistics {
   calculatedAt: Date;
 }
 
+// --- Summary por par (referencias para la tabla) ---
+// Calculado a partir de `pair_daily` excluyendo el día corriente.
+// `avgXw` y `avg1m` se ponderan por VWAP diario; `min1m`/`max1m` usan
+// `low`/`high` intradiario. Las ventanas son por calendario (7/14/30 días).
+
+export interface PairSummary {
+  pairId: string;
+  avg1w: number | null;
+  avg2w: number | null;
+  avg1m: number | null;
+  min1m: number | null;
+  max1m: number | null;
+  sampleCount1w: number;
+  sampleCount2w: number;
+  sampleCount1m: number;
+  calculatedAt: Date;
+}
+
 // --- Alertas ---
 
 export type AlertCondition = "above" | "below" | "cross_above" | "cross_below";

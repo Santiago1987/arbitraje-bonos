@@ -9,10 +9,15 @@ import {
 } from "../models/index.js";
 import { pairCalculatorService } from "../services/pair-calculator.service.js";
 import { statisticsService } from "../services/statistics.service.js";
+import { pairSummaryService } from "../services/pair-summary.service.js";
 import { dailyRollupService } from "../services/daily-rollup.service.js";
 import { alertEngine } from "../services/alert-engine.service.js";
 import { marketDataService } from "../services/market-data.service.js";
 import { bymaConnector } from "../services/byma-connector.service.js";
+import {
+  candleQueryService,
+  SUPPORTED_TIMEFRAMES,
+} from "../services/candle-query.service.js";
 import { wsServer } from "../websocket/ws-server.js";
 import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
 
@@ -70,6 +75,13 @@ const bandsQuerySchema = z.object({
 const backfillSchema = z.object({
   from: z.string().regex(dateKeyRegex),
   to: z.string().regex(dateKeyRegex),
+});
+
+const candlesQuerySchema = z.object({
+  timeframe: z.enum(SUPPORTED_TIMEFRAMES).default("5m"),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().min(1).max(5000).default(500),
 });
 
 // ============================================================
@@ -156,6 +168,15 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return { success: true };
   });
 
+  // ---- Summary (referencias para la tabla principal) ----
+  // Devuelve avg1w/avg2w/avg1m/min1m/max1m por par (excluye el día corriente).
+  // Se calcula 1× por carga del front; las diferencias % vs ratio actual las
+  // resuelve el cliente con los datos en vivo.
+  app.get("/api/pairs/summary", async () => {
+    const summaries = await pairSummaryService.getAllSummaries();
+    return { success: true, data: summaries };
+  });
+
   // ---- Statistics ----
   app.get<{ Params: { id: string }; Querystring: { window?: string } }>(
     "/api/pairs/:id/stats",
@@ -223,6 +244,32 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         .lean();
 
       return { success: true, data: snapshots.reverse() };
+    },
+  );
+
+  // ---- Candles (OHLCV) ----
+  // Devuelve velas del par en el timeframe pedido. Las velas base son de
+  // 5m (construidas en RAM por CandleBuilderService); timeframes mayores
+  // se agregan al vuelo desde las 5m con un aggregation pipeline.
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    "/api/pairs/:id/candles",
+    async (req, reply) => {
+      const query = candlesQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: query.error.format() });
+      }
+
+      const candles = await candleQueryService.getCandles({
+        pairId: req.params.id,
+        timeframe: query.data.timeframe,
+        from: query.data.from ? new Date(query.data.from) : undefined,
+        to: query.data.to ? new Date(query.data.to) : undefined,
+        limit: query.data.limit,
+      });
+
+      return { success: true, data: candles };
     },
   );
 

@@ -4,11 +4,14 @@ import type {
   BondPair,
   PairLiveData,
   PairStatistics,
+  PairSummary,
   PairSnapshot,
   AlertConfig,
   AlertCondition,
   AlertField,
   StatsWindow,
+  OHLCV,
+  TimeframeKey,
 } from "@arbitraje/shared";
 
 const BASE = "http://localhost:3001/api";
@@ -70,6 +73,13 @@ export async function deletePair(id: string): Promise<void> {
   await request(`/pairs/${id}`, { method: "DELETE" });
 }
 
+// ---- Summary ----
+
+export async function fetchPairsSummary(): Promise<PairSummary[]> {
+  const res = await request<ApiResponse<PairSummary[]>>("/pairs/summary");
+  return res.data;
+}
+
 // ---- Statistics ----
 
 export async function fetchPairStats(
@@ -105,6 +115,35 @@ export async function fetchPairHistory(
 
   const res = await request<ApiResponse<PairSnapshot[]>>(
     `/pairs/${pairId}/history?${params}`,
+  );
+  return res.data;
+}
+
+// ---- Candles ----
+
+// El backend serializa Date como ISO string en JSON.
+export type CandleAPI = Omit<OHLCV, "openTime" | "closeTime"> & {
+  openTime: string;
+  closeTime: string;
+};
+
+export async function fetchPairCandles(
+  pairId: string,
+  opts: {
+    timeframe?: TimeframeKey;
+    from?: string;
+    to?: string;
+    limit?: number;
+  } = {},
+): Promise<CandleAPI[]> {
+  const params = new URLSearchParams();
+  if (opts.timeframe) params.set("timeframe", opts.timeframe);
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  if (opts.limit) params.set("limit", String(opts.limit));
+
+  const res = await request<ApiResponse<CandleAPI[]>>(
+    `/pairs/${pairId}/candles?${params}`,
   );
   return res.data;
 }

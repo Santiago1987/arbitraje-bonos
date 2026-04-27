@@ -9,61 +9,234 @@ import {
   type IPriceLine,
   type ISeriesApi,
   type LineData,
+  type SeriesMarker,
   type UTCTimestamp,
   type WhitespaceData,
 } from "lightweight-charts";
 import { useMarketStore } from "../../store/marketStore";
-import { fetchPairHistory } from "../../services/api";
+import { fetchPairCandles } from "../../services/api";
 
 type ChartMode = "candles" | "line";
 
-const MINUTE = 60;
+const BUCKET_SECONDS = 5 * 60;
+const SESSIONS_TO_SHOW = 6; // sesión actual + 5 anteriores
+const HISTORY_LOOKBACK_DAYS = 9; // calendario, para cubrir feriados/finde
+const BAND_PERIOD = 20;
+const BAND_STDDEV = 2;
+const SMA_FAST_PERIOD = 20;
+const SMA_SLOW_PERIOD = 30;
 
-// BYMA: rueda de 10:30 a 17:00 ART (UTC-3, sin DST)
+// BYMA: rueda 10:30 a 17:00 ART (UTC-3, sin DST)
 const SESSION_OPEN_UTC_H = 13;
 const SESSION_OPEN_UTC_M = 30;
 const SESSION_CLOSE_UTC_H = 20;
 const SESSION_CLOSE_UTC_M = 0;
+const SESSION_DURATION_SEC =
+  (SESSION_CLOSE_UTC_H - SESSION_OPEN_UTC_H) * 3600 +
+  (SESSION_CLOSE_UTC_M - SESSION_OPEN_UTC_M) * 60;
+const BUCKETS_PER_SESSION = SESSION_DURATION_SEC / BUCKET_SECONDS; // 78
+
+// Anchor arbitrario para el eje "lógico". El chartTime no representa un
+// instante real — es un índice secuencial empacado en un UTCTimestamp para
+// que lightweight-charts lo acepte. El mapeo a tiempo real se mantiene aparte.
+const CHART_TIME_ANCHOR = Math.floor(Date.UTC(2020, 0, 1) / 1000);
 
 interface Candle {
-  time: UTCTimestamp;
   open: number;
   high: number;
   low: number;
   close: number;
 }
 
-const floorToMinute = (ts: number) => Math.floor(ts / MINUTE) * MINUTE;
+interface Slot {
+  chartTime: UTCTimestamp; // tiempo lógico (índice secuencial)
+  realStart: number; // segundos UTC del inicio del bucket real
+  candle?: Candle;
+}
 
-// Lightweight-charts muestra tiempos en UTC. Restamos 3 h para renderizar en ART.
-const formatArtHHMM = (time: UTCTimestamp) => {
-  const art = new Date(((time as number) - 3 * 3600) * 1000);
+const floorToBucket = (tsSec: number) =>
+  Math.floor(tsSec / BUCKET_SECONDS) * BUCKET_SECONDS;
+
+const sessionOpenUtcSec = (refMs: number): number => {
+  // Día calendario en ART (UTC-3) → primer bucket (10:30 ART = 13:30 UTC).
+  const art = new Date(refMs - 3 * 3600 * 1000);
+  return (
+    Date.UTC(
+      art.getUTCFullYear(),
+      art.getUTCMonth(),
+      art.getUTCDate(),
+      SESSION_OPEN_UTC_H,
+      SESSION_OPEN_UTC_M,
+    ) / 1000
+  );
+};
+
+const formatArtHHMM = (realSec: number): string => {
+  const art = new Date((realSec - 3 * 3600) * 1000);
   const hh = String(art.getUTCHours()).padStart(2, "0");
   const mm = String(art.getUTCMinutes()).padStart(2, "0");
   return `${hh}:${mm}`;
 };
 
-const getSessionRange = (refMs: number = Date.now()) => {
-  // Día calendario en ART para anclar la rueda
-  const art = new Date(refMs - 3 * 3600 * 1000);
+const formatArtDateTime = (realSec: number): string => {
+  const art = new Date((realSec - 3 * 3600) * 1000);
   const y = art.getUTCFullYear();
-  const m = art.getUTCMonth();
-  const d = art.getUTCDate();
-  const from = Date.UTC(y, m, d, SESSION_OPEN_UTC_H, SESSION_OPEN_UTC_M) / 1000;
-  const to = Date.UTC(y, m, d, SESSION_CLOSE_UTC_H, SESSION_CLOSE_UTC_M) / 1000;
-  return { from: from as UTCTimestamp, to: to as UTCTimestamp };
+  const m = String(art.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(art.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d} ${formatArtHHMM(realSec)}`;
 };
 
-const buildWhitespace = (range: {
-  from: UTCTimestamp;
-  to: UTCTimestamp;
-}): WhitespaceData[] => {
-  const out: WhitespaceData[] = [];
-  for (let t = range.from as number; t <= (range.to as number); t += MINUTE) {
-    out.push({ time: t as UTCTimestamp });
+interface HistoricalCandle extends Candle {
+  realStart: number;
+}
+
+/**
+ * Construye la lista ordenada de slots a partir de las velas históricas
+ * (cualquier número de sesiones pasadas) más el esqueleto de la sesión actual
+ * (10:30 a 17:00 ART) con whitespace en los buckets sin datos.
+ *
+ * Cada slot recibe un chartTime secuencial: chartTime[i] = anchor + i * 5m.
+ * Esto comprime visualmente el eje (sin huecos nocturnos / fin de semana).
+ */
+function buildSlots(historical: HistoricalCandle[]): {
+  slots: Slot[];
+  byBucket: Map<number, number>; // realStart → índice del slot
+} {
+  const fromHistory = new Map<number, Candle>();
+  for (const c of historical) {
+    fromHistory.set(c.realStart, {
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+    });
   }
-  return out;
-};
+
+  // Esqueleto de la rueda actual: todos los buckets 10:30..16:55. Sólo
+  // pre-allocamos si hoy es día hábil (Lun-Vie) en ART; en finde no tiene
+  // sentido mostrar un bloque vacío al final.
+  const artNow = new Date(Date.now() - 3 * 3600 * 1000);
+  const artWeekday = artNow.getUTCDay(); // 0=Dom, 6=Sáb
+  const isTradingDay = artWeekday >= 1 && artWeekday <= 5;
+
+  const todayBuckets: number[] = [];
+  if (isTradingDay) {
+    const todaySessionStart = sessionOpenUtcSec(Date.now());
+    for (let i = 0; i < BUCKETS_PER_SESSION; i++) {
+      todayBuckets.push(todaySessionStart + i * BUCKET_SECONDS);
+    }
+  }
+
+  const allBuckets = Array.from(
+    new Set<number>([...fromHistory.keys(), ...todayBuckets]),
+  ).sort((a, b) => a - b);
+
+  const slots: Slot[] = [];
+  const byBucket = new Map<number, number>();
+
+  for (let i = 0; i < allBuckets.length; i++) {
+    const realStart = allBuckets[i];
+    slots.push({
+      chartTime: (CHART_TIME_ANCHOR + i * BUCKET_SECONDS) as UTCTimestamp,
+      realStart,
+      candle: fromHistory.get(realStart),
+    });
+    byBucket.set(realStart, i);
+  }
+
+  return { slots, byBucket };
+}
+
+interface BandPoint {
+  upper: number;
+  lower: number;
+}
+
+/**
+ * Bollinger sobre los `close` de las velas reales de la lista de slots
+ * (ignora whitespace). Usa stddev poblacional, que es la convención clásica.
+ */
+function computeBands(
+  slots: Slot[],
+  period: number,
+  multiplier: number,
+): Map<number, BandPoint> {
+  const bands = new Map<number, BandPoint>();
+  const closes: number[] = [];
+
+  for (let i = 0; i < slots.length; i++) {
+    const c = slots[i].candle;
+    if (!c) continue;
+    closes.push(c.close);
+    if (closes.length < period) continue;
+
+    let sum = 0;
+    for (let k = closes.length - period; k < closes.length; k++) sum += closes[k];
+    const mean = sum / period;
+
+    let varSum = 0;
+    for (let k = closes.length - period; k < closes.length; k++) {
+      const d = closes[k] - mean;
+      varSum += d * d;
+    }
+    const stddev = Math.sqrt(varSum / period);
+
+    bands.set(i, {
+      upper: mean + multiplier * stddev,
+      lower: mean - multiplier * stddev,
+    });
+  }
+
+  return bands;
+}
+
+/**
+ * Markers en cada apertura de rueda (10:30 ART) para que la transición
+ * entre sesiones sea visible en el chart, ya que el eje X está comprimido
+ * (sin huecos nocturnos / fin de semana).
+ */
+function buildSessionMarkers(slots: Slot[]): SeriesMarker<UTCTimestamp>[] {
+  const sessionOpenSecOfDay =
+    SESSION_OPEN_UTC_H * 3600 + SESSION_OPEN_UTC_M * 60;
+  const markers: SeriesMarker<UTCTimestamp>[] = [];
+  for (const s of slots) {
+    const utcSecOfDay = ((s.realStart % 86400) + 86400) % 86400;
+    if (utcSecOfDay !== sessionOpenSecOfDay) continue;
+    const art = new Date((s.realStart - 3 * 3600) * 1000);
+    const dd = String(art.getUTCDate()).padStart(2, "0");
+    const mm = String(art.getUTCMonth() + 1).padStart(2, "0");
+    markers.push({
+      time: s.chartTime,
+      position: "belowBar",
+      color: "#3b82f6",
+      shape: "arrowUp",
+      text: `${dd}/${mm}`,
+    });
+  }
+  return markers;
+}
+
+/**
+ * Media móvil simple sobre los `close` de las velas reales (ignora whitespace).
+ * Devuelve un Map indexado por posición del slot para alinear con el chartTime.
+ */
+function computeSMA(slots: Slot[], period: number): Map<number, number> {
+  const sma = new Map<number, number>();
+  const closes: number[] = [];
+
+  for (let i = 0; i < slots.length; i++) {
+    const c = slots[i].candle;
+    if (!c) continue;
+    closes.push(c.close);
+    if (closes.length < period) continue;
+
+    let sum = 0;
+    for (let k = closes.length - period; k < closes.length; k++) sum += closes[k];
+    sma.set(i, sum / period);
+  }
+
+  return sma;
+}
 
 const RatioChart = () => {
   const selectedPairId = useMarketStore((s) => s.selectedPairId);
@@ -92,40 +265,87 @@ const RatioChart = () => {
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const candlesRef = useRef<Map<number, Candle>>(new Map());
+  const upperBandSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const lowerBandSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const smaFastSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const smaSlowSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+
+  const slotsRef = useRef<Slot[]>([]);
+  const byBucketRef = useRef<Map<number, number>>(new Map());
   const priceLinesRef = useRef<IPriceLine[]>([]);
-  const sessionRangeRef = useRef(getSessionRange());
   const currentPairIdRef = useRef<string | null>(null);
 
-  // Re-dibuja toda la serie desde el buffer (sobre el esqueleto de la rueda)
+  // Re-pinta toda la serie + bandas a partir del estado actual de los slots.
   const redraw = () => {
-    const range = sessionRangeRef.current;
-    const ws = buildWhitespace(range);
-    const byTime = new Map<number, Candle>();
-    for (const c of candlesRef.current.values())
-      byTime.set(c.time as number, c);
+    const slots = slotsRef.current;
+    if (slots.length === 0) {
+      candleSeriesRef.current?.setData([]);
+      lineSeriesRef.current?.setData([]);
+      upperBandSeriesRef.current?.setData([]);
+      lowerBandSeriesRef.current?.setData([]);
+      smaFastSeriesRef.current?.setData([]);
+      smaSlowSeriesRef.current?.setData([]);
+      return;
+    }
 
     if (mode === "candles" && candleSeriesRef.current) {
-      const data: (CandlestickData | WhitespaceData)[] = ws.map((w) => {
-        const c = byTime.get(w.time as number);
-        return c
+      const data: (CandlestickData | WhitespaceData)[] = slots.map((s) =>
+        s.candle
           ? {
-              time: c.time,
-              open: c.open,
-              high: c.high,
-              low: c.low,
-              close: c.close,
+              time: s.chartTime,
+              open: s.candle.open,
+              high: s.candle.high,
+              low: s.candle.low,
+              close: s.candle.close,
             }
-          : w;
-      });
+          : { time: s.chartTime },
+      );
       candleSeriesRef.current.setData(data);
     } else if (mode === "line" && lineSeriesRef.current) {
-      const data: (LineData | WhitespaceData)[] = ws.map((w) => {
-        const c = byTime.get(w.time as number);
-        return c ? { time: c.time, value: c.close } : w;
-      });
+      const data: (LineData | WhitespaceData)[] = slots.map((s) =>
+        s.candle
+          ? { time: s.chartTime, value: s.candle.close }
+          : { time: s.chartTime },
+      );
       lineSeriesRef.current.setData(data);
     }
+
+    // Bollinger
+    const bands = computeBands(slots, BAND_PERIOD, BAND_STDDEV);
+    const upperData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
+      const b = bands.get(i);
+      return b ? { time: s.chartTime, value: b.upper } : { time: s.chartTime };
+    });
+    const lowerData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
+      const b = bands.get(i);
+      return b ? { time: s.chartTime, value: b.lower } : { time: s.chartTime };
+    });
+    upperBandSeriesRef.current?.setData(upperData);
+    lowerBandSeriesRef.current?.setData(lowerData);
+
+    // SMA 20 / SMA 30
+    const smaFast = computeSMA(slots, SMA_FAST_PERIOD);
+    const smaSlow = computeSMA(slots, SMA_SLOW_PERIOD);
+    const smaFastData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
+      const v = smaFast.get(i);
+      return v !== undefined
+        ? { time: s.chartTime, value: v }
+        : { time: s.chartTime };
+    });
+    const smaSlowData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
+      const v = smaSlow.get(i);
+      return v !== undefined
+        ? { time: s.chartTime, value: v }
+        : { time: s.chartTime };
+    });
+    smaFastSeriesRef.current?.setData(smaFastData);
+    smaSlowSeriesRef.current?.setData(smaSlowData);
+
+    // Markers de inicio de rueda en la serie activa.
+    const markers = buildSessionMarkers(slots);
+    const mainSeries =
+      mode === "candles" ? candleSeriesRef.current : lineSeriesRef.current;
+    mainSeries?.setMarkers(markers);
   };
 
   // Crear chart una sola vez
@@ -144,14 +364,35 @@ const RatioChart = () => {
       },
       rightPriceScale: { borderColor: "rgba(36, 48, 68, 0.6)" },
       localization: {
-        timeFormatter: (time: UTCTimestamp) => formatArtHHMM(time),
+        // Crosshair / tooltip muestra fecha + hora ART real (no la lógica)
+        timeFormatter: (chartTime: UTCTimestamp) => {
+          const idx = (Number(chartTime) - CHART_TIME_ANCHOR) / BUCKET_SECONDS;
+          const slot = slotsRef.current[idx];
+          return slot ? formatArtDateTime(slot.realStart) : "";
+        },
       },
       timeScale: {
         borderColor: "rgba(36, 48, 68, 0.6)",
         timeVisible: true,
         secondsVisible: false,
         rightOffset: 2,
-        tickMarkFormatter: (time: UTCTimestamp) => formatArtHHMM(time),
+        tickMarkFormatter: (chartTime: UTCTimestamp) => {
+          const idx = (Number(chartTime) - CHART_TIME_ANCHOR) / BUCKET_SECONDS;
+          const slot = slotsRef.current[idx];
+          if (!slot) return "";
+          // Si es el primer bucket de su rueda (10:30 ART = 13:30 UTC)
+          // mostramos la fecha como marcador de inicio de sesión.
+          const utcSecOfDay = ((slot.realStart % 86400) + 86400) % 86400;
+          const sessionOpenUtcSecOfDay =
+            SESSION_OPEN_UTC_H * 3600 + SESSION_OPEN_UTC_M * 60;
+          if (utcSecOfDay === sessionOpenUtcSecOfDay) {
+            const art = new Date((slot.realStart - 3 * 3600) * 1000);
+            const dd = String(art.getUTCDate()).padStart(2, "0");
+            const mm = String(art.getUTCMonth() + 1).padStart(2, "0");
+            return `${dd}/${mm}`;
+          }
+          return formatArtHHMM(slot.realStart);
+        },
       },
       crosshair: {
         vertLine: { color: "#3b82f6", width: 1, style: LineStyle.Dashed },
@@ -162,6 +403,40 @@ const RatioChart = () => {
     });
 
     chartRef.current = chart;
+
+    // Bandas Bollinger (siempre visibles, encima de la serie principal)
+    upperBandSeriesRef.current = chart.addLineSeries({
+      color: "rgba(168, 85, 247, 0.85)",
+      lineWidth: 1,
+      priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    lowerBandSeriesRef.current = chart.addLineSeries({
+      color: "rgba(168, 85, 247, 0.85)",
+      lineWidth: 1,
+      priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+
+    // SMA rápida (20) y lenta (30)
+    smaFastSeriesRef.current = chart.addLineSeries({
+      color: "#facc15",
+      lineWidth: 1,
+      priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+      lastValueVisible: false,
+      priceLineVisible: false,
+      title: `SMA${SMA_FAST_PERIOD}`,
+    });
+    smaSlowSeriesRef.current = chart.addLineSeries({
+      color: "#f97316",
+      lineWidth: 1,
+      priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+      lastValueVisible: false,
+      priceLineVisible: false,
+      title: `SMA${SMA_SLOW_PERIOD}`,
+    });
 
     const handleResize = () => {
       if (containerRef.current && chartRef.current) {
@@ -178,10 +453,14 @@ const RatioChart = () => {
       chartRef.current = null;
       candleSeriesRef.current = null;
       lineSeriesRef.current = null;
+      upperBandSeriesRef.current = null;
+      lowerBandSeriesRef.current = null;
+      smaFastSeriesRef.current = null;
+      smaSlowSeriesRef.current = null;
     };
   }, []);
 
-  // Intercambiar serie según el modo (vela/línea) y re-sembrar
+  // Intercambiar serie principal según el modo (vela/línea)
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
@@ -214,12 +493,9 @@ const RatioChart = () => {
     }
 
     redraw();
-    chart.timeScale().setVisibleRange(sessionRangeRef.current);
   }, [mode]);
 
-  // Pintar alertas configuradas sobre el ratio como líneas horizontales
-  // punteadas amarillas. Se re-sincroniza al cambiar de par, de modo de vista
-  // (que recrea la serie) o al altas/bajas/ediciones de alertas.
+  // Pintar alertas configuradas como líneas horizontales sobre la serie.
   useEffect(() => {
     const series =
       mode === "candles" ? candleSeriesRef.current : lineSeriesRef.current;
@@ -247,83 +523,88 @@ const RatioChart = () => {
     }
   }, [pairAlertConfigs, mode]);
 
-  // Limpiar buffer, re-anclar la rueda y sembrar velas desde historial al
-  // cambiar de par. Previene el flicker al recargar / cambiar de ratio.
+  // Cambiar de par: limpiar buffer y recargar histórico (semana + sesión actual).
   useEffect(() => {
     if (currentPairIdRef.current === selectedPairId) return;
     currentPairIdRef.current = selectedPairId;
-    candlesRef.current.clear();
-    sessionRangeRef.current = getSessionRange();
+    slotsRef.current = [];
+    byBucketRef.current = new Map();
     redraw();
-    chartRef.current?.timeScale().setVisibleRange(sessionRangeRef.current);
 
     if (!selectedPairId) return;
 
     const pairIdAtFetchStart = selectedPairId;
-    const range = sessionRangeRef.current;
-    const fromIso = new Date((range.from as number) * 1000).toISOString();
-    const toIso = new Date((range.to as number) * 1000).toISOString();
+    const now = Date.now();
+    const fromMs = now - HISTORY_LOOKBACK_DAYS * 24 * 3600 * 1000;
+    const toMs = now + 24 * 3600 * 1000; // un día de buffer
+    const fromIso = new Date(fromMs).toISOString();
+    const toIso = new Date(toMs).toISOString();
+    const limit = SESSIONS_TO_SHOW * BUCKETS_PER_SESSION + BAND_PERIOD + 50;
 
-    fetchPairHistory(pairIdAtFetchStart, fromIso, toIso, 10000)
-      .then((snapshots) => {
-        // Carrera: el usuario cambió de par antes de que volviera el fetch
+    fetchPairCandles(pairIdAtFetchStart, {
+      timeframe: "5m",
+      from: fromIso,
+      to: toIso,
+      limit,
+    })
+      .then((apiCandles) => {
         if (currentPairIdRef.current !== pairIdAtFetchStart) return;
 
-        for (const snap of snapshots) {
-          if (!Number.isFinite(snap.ratio)) continue;
-          const ts = Math.floor(new Date(snap.timestamp).getTime() / 1000);
-          const minute = floorToMinute(ts);
-          const price = snap.ratio;
-          const existing = candlesRef.current.get(minute);
-          if (!existing) {
-            candlesRef.current.set(minute, {
-              time: minute as UTCTimestamp,
-              open: price,
-              high: price,
-              low: price,
-              close: price,
-            });
-          } else {
-            existing.close = price;
-            if (price > existing.high) existing.high = price;
-            if (price < existing.low) existing.low = price;
-          }
-        }
+        // Asc por openTime
+        apiCandles.sort(
+          (a, b) =>
+            new Date(a.openTime).getTime() - new Date(b.openTime).getTime(),
+        );
+
+        const historical: HistoricalCandle[] = apiCandles.map((c) => ({
+          realStart: Math.floor(new Date(c.openTime).getTime() / 1000),
+          open: c.open,
+          high: c.high,
+          low: c.low,
+          close: c.close,
+        }));
+
+        const { slots, byBucket } = buildSlots(historical);
+        slotsRef.current = slots;
+        byBucketRef.current = byBucket;
         redraw();
+
+        // Foco en la rueda actual + algo del día anterior
+        const chart = chartRef.current;
+        if (chart && slots.length > 0) {
+          const lastIdx = slots.length - 1;
+          const fromIdx = Math.max(0, lastIdx - BUCKETS_PER_SESSION * 2);
+          chart.timeScale().setVisibleLogicalRange({
+            from: fromIdx,
+            to: lastIdx + 1,
+          });
+        }
       })
       .catch((err) => {
-        console.error("Error cargando historial del par", err);
+        console.error("Error cargando velas del par", err);
       });
   }, [selectedPairId]);
 
-  // Ingestar cada tick en la vela de 1 minuto correspondiente
+  // Ingestar cada tick en el bucket de 5m correspondiente.
   useEffect(() => {
     if (!live || !selectedPairId) return;
     if (live.pairId !== selectedPairId) return;
     if (!Number.isFinite(live.currentRatio)) return;
 
     const ts = Math.floor(new Date(live.timestamp).getTime() / 1000);
-    const minute = floorToMinute(ts);
+    const bucket = floorToBucket(ts);
+    const idx = byBucketRef.current.get(bucket);
+    if (idx === undefined) return; // tick fuera de la rueda dibujada
+
+    const slot = slotsRef.current[idx];
     const price = live.currentRatio;
-
-    const existing = candlesRef.current.get(minute);
-    if (!existing) {
-      candlesRef.current.set(minute, {
-        time: minute as UTCTimestamp,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-      });
+    if (!slot.candle) {
+      slot.candle = { open: price, high: price, low: price, close: price };
     } else {
-      existing.close = price;
-      if (price > existing.high) existing.high = price;
-      if (price < existing.low) existing.low = price;
+      if (price > slot.candle.high) slot.candle.high = price;
+      if (price < slot.candle.low) slot.candle.low = price;
+      slot.candle.close = price;
     }
-
-    // No se puede usar series.update() porque el whitespace de la rueda
-    // extiende la "última hora" hasta las 17:00, y los ticks suelen caer
-    // en un minuto anterior. Reescribimos el set entero (≤390 puntos).
     redraw();
   }, [live, selectedPairId, mode]);
 
@@ -332,7 +613,8 @@ const RatioChart = () => {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted">
-            Ratio intradiario (velas 1m)
+            Ratio · velas 5m · semana + Bollinger ({BAND_PERIOD}, {BAND_STDDEV}σ)
+            · SMA {SMA_FAST_PERIOD}/{SMA_SLOW_PERIOD}
           </div>
           <div className="text-lg font-semibold font-mono text-white">
             {pair ? pair.name : "Seleccioná un par"}
