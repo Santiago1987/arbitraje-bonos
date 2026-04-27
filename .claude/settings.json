@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(/e/Proyectos/arbitraje-bonos/shared/node_modules/.bin/tsc --noEmit -p tsconfig.check.json)",
-      "Bash(pnpm exec *)"
+      "Bash(pnpm exec *)",
+      "Bash(pnpm --filter backend exec tsc -b)",
+      "Read(//e/Proyectos/**)",
+      "Bash(pnpm run *)",
+      "Bash(pnpm --filter backend run backfill:candles)",
+      "Bash(pnpm dev:backend)",
+      "Bash(curl -s http://localhost:3001/api/health)"
     ]
   }
 }
