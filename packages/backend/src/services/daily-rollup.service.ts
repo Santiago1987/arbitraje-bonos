@@ -105,6 +105,10 @@ class DailyRollupService {
         $group: {
           _id: "$pairId",
           ratios: { $push: "$ratio" },
+          // `timestamps` se preserva en el mismo orden que `ratios` (gracias al
+          // $sort previo). Lo usamos abajo para bucketear en velas de 5m y
+          // calcular `avgClose` (promedio del close de cada vela).
+          timestamps: { $push: "$timestamp" },
           // Peso VWAP = volumen de la pata A (mejor proxy disponible).
           weights: { $push: "$volumeA" },
           high: { $max: "$ratio" },
@@ -127,6 +131,7 @@ class DailyRollupService {
       const pairId = row._id as string;
       const ratios: number[] = row.ratios;
       const weights: number[] = row.weights;
+      const timestamps: Date[] = row.timestamps;
       const n = ratios.length;
       if (n === 0) continue;
 
@@ -144,6 +149,31 @@ class DailyRollupService {
             )
           : 0;
 
+      // avgClose: promedio del close de cada vela de 5m de la rueda.
+      // Como los snapshots están ordenados ASC y filtrados a fase 'regular',
+      // recorremos secuencialmente: cada vez que cambia el bucket de 5m,
+      // empujamos el último ratio del bucket anterior (= su close).
+      // Resultado: una vela de 5m por bucket que tuvo al menos un snapshot
+      // 'regular'. Las velas que straddlean warmup→regular usan sólo la
+      // porción regular, lo cual es exactamente lo que queremos.
+      const BUCKET_MS = 5 * 60_000;
+      const closes: number[] = [];
+      let lastBucket = -1;
+      let currentClose = 0;
+      for (let i = 0; i < n; i++) {
+        const bucket = Math.floor(timestamps[i].getTime() / BUCKET_MS);
+        if (bucket !== lastBucket) {
+          if (lastBucket !== -1) closes.push(currentClose);
+          lastBucket = bucket;
+        }
+        currentClose = ratios[i];
+      }
+      if (lastBucket !== -1) closes.push(currentClose);
+      const avgClose =
+        closes.length > 0
+          ? closes.reduce((a, b) => a + b, 0) / closes.length
+          : ratios[n - 1];
+
       bulkOps.push({
         updateOne: {
           filter: { pairId, date },
@@ -156,6 +186,7 @@ class DailyRollupService {
               low: row.low,
               close: ratios[n - 1],
               vwap,
+              avgClose,
               stdDev,
               sampleCount: n,
               firstRegularTs: row.firstTs,

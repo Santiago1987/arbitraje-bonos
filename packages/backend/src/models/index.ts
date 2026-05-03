@@ -221,6 +221,10 @@ const pairDailySchema = new Schema<PairDailyDoc>(
     low: { type: Number, required: true },
     close: { type: Number, required: true },
     vwap: { type: Number, required: true },
+    // Promedio simple del close de cada vela 5m construida sobre snapshots
+    // 'regular'. Lo usa el endpoint de bandas. `default: 0` para que filas
+    // viejas migradas no fallen — un backfill las recalcula.
+    avgClose: { type: Number, required: true, default: 0 },
     stdDev: { type: Number, default: 0 },
     sampleCount: { type: Number, required: true },
     firstRegularTs: { type: Date, required: true },

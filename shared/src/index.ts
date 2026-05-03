@@ -126,25 +126,34 @@ export interface PairDaily {
   low: number;
   close: number;
   vwap: number; // promedio ponderado por volumen del ratio
+  // Promedio simple del close de las velas 5m de la rueda (sólo buckets que
+  // contengan al menos un snapshot en fase 'regular'). Es el "promedio de
+  // precios del día" que usa el cálculo de bandas — distinto al `vwap`
+  // (ponderado por volumen) y al `mean` (promedio de todos los snapshots).
+  avgClose: number;
   stdDev: number;
   sampleCount: number;
   firstRegularTs: Date;
   lastRegularTs: Date;
 }
 
-// Banda "tipo Bollinger" construida con promedios móviles de high/low.
-// upper[i] = promedio de `high` en los últimos N días hasta daily[i]
-// lower[i] = promedio de `low`  en los últimos N días hasta daily[i]
+// Banda dinámica que proyecta una excursión esperada sobre el promedio de
+// precios de la rueda anterior (ver routes/index.ts para la fórmula completa).
+// Para la fecha D:
+//   delta_k     = high(D-k) − avgClose(D-k-1)         // k = 1..window
+//   upperBand(D) = avgClose(D-1) + (Σ delta_k) / window
+//   (idem con `low` para lowerBand)
+// La última fila puede ser sintética (date = hoy aún sin rollup) — en ese
+// caso `high`/`low` son null y sólo importan los promedios.
 export interface PairDailyBands {
   pairId: string;
   pairName: string;
-  window: number; // ej: 5, 10, 20
+  window: number; // cantidad de deltas promediados (default 16)
   series: Array<{
     date: string;
-    high: number;
-    low: number;
-    close: number;
-    upperBand: number | null; // null hasta que haya `window` muestras
+    high: number | null;
+    low: number | null;
+    upperBand: number | null;
     lowerBand: number | null;
   }>;
 }
@@ -188,18 +197,18 @@ export interface PairStatistics {
 
 // --- Summary por par (referencias para la tabla) ---
 // Calculado a partir de `pair_daily` excluyendo el día corriente.
-// `avgXw` y `avg1m` se ponderan por VWAP diario; `min1m`/`max1m` usan
-// `low`/`high` intradiario. Las ventanas son por calendario (7/14/30 días).
+// `avgPrev` toma `avgClose` de la última rueda; `avg1w`/`avg1m` promedian
+// VWAP diario; `min1m`/`max1m` usan `low`/`high` intradiario. Las ventanas
+// son por calendario (7/30 días).
 
 export interface PairSummary {
   pairId: string;
+  avgPrev: number | null;
   avg1w: number | null;
-  avg2w: number | null;
   avg1m: number | null;
   min1m: number | null;
   max1m: number | null;
   sampleCount1w: number;
-  sampleCount2w: number;
   sampleCount1m: number;
   calculatedAt: Date;
 }

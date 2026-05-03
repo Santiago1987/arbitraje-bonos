@@ -19,6 +19,7 @@ import {
   SUPPORTED_TIMEFRAMES,
 } from "../services/candle-query.service.js";
 import { wsServer } from "../websocket/ws-server.js";
+import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
 import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
 
 // ============================================================
@@ -59,17 +60,11 @@ const dailyQuerySchema = z.object({
 });
 
 const bandsQuerySchema = z.object({
-  windows: z
-    .string()
-    .default("5,10,20")
-    .transform((s) =>
-      s
-        .split(",")
-        .map((n) => parseInt(n.trim(), 10))
-        .filter((n) => Number.isFinite(n) && n > 0 && n <= 200),
-    )
-    .refine((arr) => arr.length > 0, "windows debe tener al menos un valor"),
-  days: z.coerce.number().min(1).max(2000).default(120),
+  // `window` = cantidad de deltas a promediar. Para la fórmula nueva (ver el
+  // handler de /api/pairs/:id/daily/bands) cada delta consume DOS filas, así
+  // que la fila D necesita `window + 1` ruedas previas con datos.
+  window: z.coerce.number().min(1).max(200).default(16),
+  days: z.coerce.number().min(1).max(2000).default(30),
 });
 
 const backfillSchema = z.object({
@@ -169,7 +164,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ---- Summary (referencias para la tabla principal) ----
-  // Devuelve avg1w/avg2w/avg1m/min1m/max1m por par (excluye el día corriente).
+  // Devuelve avgPrev/avg1w/avg1m/min1m/max1m por par (excluye el día corriente).
   // Se calcula 1× por carga del front; las diferencias % vs ratio actual las
   // resuelve el cliente con los datos en vivo.
   app.get("/api/pairs/summary", async () => {
@@ -303,9 +298,34 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // Bandas "tipo Bollinger" construidas con promedios móviles de high/low.
-  // Devuelve la serie diaria con upperBand/lowerBand para cada `window`
-  // pedido. El cálculo de rolling se hace al vuelo — no se persiste.
+  // ============================================================
+  // Bandas diarias dinámicas (nueva fórmula)
+  // ============================================================
+  //
+  // Idea: tomar la "excursión" promedio del high (o low) respecto al promedio
+  // de precios del día anterior, y proyectarla sobre el promedio de precios
+  // de la rueda anterior a D. Da bandas que se mueven con el nivel reciente
+  // del ratio en lugar de un piso/techo fijo.
+  //
+  // Sea `avgClose(D)` el promedio simple del close de las velas de 5m de la
+  // fase 'regular' de D (calculado en el rollup, ver daily-rollup.service.ts).
+  // Para una rueda D queremos:
+  //
+  //   delta_k     = high(D-k) − avgClose(D-k-1)         para k = 1..window
+  //   upperBand(D) = avgClose(D-1) + (Σ delta_k) / window
+  //
+  //   delta_k     = low(D-k)  − avgClose(D-k-1)
+  //   lowerBand(D) = avgClose(D-1) + (Σ delta_k) / window
+  //                 ↑ los delta del low son ~siempre negativos, así que en la
+  //                   práctica esto resta del avgClose de ayer.
+  //
+  // Cada delta consume DOS filas (D-k y D-k-1), por eso para D necesitamos
+  // las `window + 1` ruedas previas con datos. Default `window = 16` ⇒ 17
+  // filas previas.
+  //
+  // Si la última fila de pair_daily no es la de hoy (rollup aún no corrió),
+  // appendeamos una fila sintética con date=hoy cuya banda usa las últimas
+  // `window + 1` filas reales. high/low/avgClose quedan en null en esa fila.
   app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
     "/api/pairs/:id/daily/bands",
     async (req, reply) => {
@@ -323,11 +343,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           .send({ success: false, error: "Par no encontrado" });
       }
 
-      const windows = query.data.windows;
-      const maxWindow = Math.max(...windows);
-      // Pedimos suficientes filas para que la primer fila devuelta ya
-      // tenga `maxWindow` muestras previas disponibles.
-      const fetchCount = query.data.days + maxWindow - 1;
+      const w = query.data.window;
+      // `days` filas con banda válida ⇒ necesito `days` filas de output;
+      // cada banda requiere `w + 1` filas previas. Total a leer:
+      const required = w + 1;
+      const fetchCount = query.data.days + required;
 
       const rows = (await PairDailyModel.find({ pairId: req.params.id })
         .sort({ date: -1 })
@@ -336,46 +356,78 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
 
       const asc = rows.reverse();
 
-      const bands: PairDailyBands[] = windows.map((w) => ({
+      // Calcula upperBand/lowerBand para la fila en `asc[i]` usando la
+      // fórmula descripta arriba. Devuelve null/null si no hay suficientes
+      // filas previas (i < w + 1).
+      const computeBands = (
+        i: number,
+      ): { upperBand: number | null; lowerBand: number | null } => {
+        if (i < required) return { upperBand: null, lowerBand: null };
+        // avgClose de la rueda anterior — base sobre la que proyectamos.
+        const baseAvgClose = asc[i - 1].avgClose;
+        let sumDeltaHigh = 0;
+        let sumDeltaLow = 0;
+        for (let k = 1; k <= w; k++) {
+          // delta_k usa la rueda D-k (asc[i-k]) y la rueda D-k-1 (asc[i-k-1])
+          sumDeltaHigh += asc[i - k].high - asc[i - k - 1].avgClose;
+          sumDeltaLow += asc[i - k].low - asc[i - k - 1].avgClose;
+        }
+        return {
+          upperBand: baseAvgClose + sumDeltaHigh / w,
+          lowerBand: baseAvgClose + sumDeltaLow / w,
+        };
+      };
+
+      const series: PairDailyBands["series"] = asc.map((row, i) => {
+        const { upperBand, lowerBand } = computeBands(i);
+        return {
+          date: row.date,
+          high: row.high,
+          low: row.low,
+          upperBand,
+          lowerBand,
+        };
+      });
+
+      // Fila sintética para la rueda en curso (cuando todavía no hay rollup
+      // de hoy) — usa las últimas `w + 1` filas reales como D-1..D-(w+1).
+      const cfg = getSessionConfig();
+      const todayKey = getLocalDateKey(new Date(), cfg.timezone);
+      const lastDate = asc[asc.length - 1]?.date;
+      if (
+        asc.length >= required &&
+        lastDate !== todayKey &&
+        todayKey > (lastDate ?? "")
+      ) {
+        // El "índice virtual" de hoy en `asc` sería asc.length, así que
+        // computeBands(asc.length) reutiliza la misma lógica.
+        const baseAvgClose = asc[asc.length - 1].avgClose;
+        let sumDeltaHigh = 0;
+        let sumDeltaLow = 0;
+        for (let k = 1; k <= w; k++) {
+          const idx = asc.length - k;
+          sumDeltaHigh += asc[idx].high - asc[idx - 1].avgClose;
+          sumDeltaLow += asc[idx].low - asc[idx - 1].avgClose;
+        }
+        series.push({
+          date: todayKey,
+          high: null,
+          low: null,
+          upperBand: baseAvgClose + sumDeltaHigh / w,
+          lowerBand: baseAvgClose + sumDeltaLow / w,
+        });
+      }
+
+      // Recortamos a los últimos `days + 1` (para incluir hoy si fue
+      // sintetizado) — el cliente no tiene que descartar nulls.
+      const trimmed = series.slice(-(query.data.days + 1));
+
+      const bands: PairDailyBands = {
         pairId: req.params.id,
         pairName: pair.name,
         window: w,
-        series: asc.map((row, i) => {
-          const start = i - w + 1;
-          if (start < 0) {
-            return {
-              date: row.date,
-              high: row.high,
-              low: row.low,
-              close: row.close,
-              upperBand: null,
-              lowerBand: null,
-            };
-          }
-          let sumH = 0;
-          let sumL = 0;
-          for (let k = start; k <= i; k++) {
-            sumH += asc[k].high;
-            sumL += asc[k].low;
-          }
-          return {
-            date: row.date,
-            high: row.high,
-            low: row.low,
-            close: row.close,
-            upperBand: sumH / w,
-            lowerBand: sumL / w,
-          };
-        }),
-      }));
-
-      // Recortamos a los últimos `days` para que el cliente no tenga que
-      // descartar las filas iniciales con bandas null.
-      for (const b of bands) {
-        if (b.series.length > query.data.days) {
-          b.series = b.series.slice(b.series.length - query.data.days);
-        }
-      }
+        series: trimmed,
+      };
 
       return { success: true, data: bands };
     },

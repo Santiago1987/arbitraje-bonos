@@ -4,6 +4,7 @@ import {
   createChart,
   ColorType,
   LineStyle,
+  type AreaData,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
@@ -14,17 +15,28 @@ import {
   type WhitespaceData,
 } from "lightweight-charts";
 import { useMarketStore } from "../../store/marketStore";
-import { fetchPairCandles } from "../../services/api";
+import { fetchPairCandles, fetchPairDailyBands } from "../../services/api";
 
 type ChartMode = "candles" | "line";
 
 const BUCKET_SECONDS = 5 * 60;
 const SESSIONS_TO_SHOW = 6; // sesión actual + 5 anteriores
 const HISTORY_LOOKBACK_DAYS = 9; // calendario, para cubrir feriados/finde
-const BAND_PERIOD = 20;
-const BAND_STDDEV = 2;
+// Cantidad de deltas que promedia la fórmula de bandas (ver el handler de
+// /api/pairs/:id/daily/bands para la fórmula completa). Cada delta consume
+// 2 ruedas, así que la primera fila con banda válida necesita BANDS_WINDOW+1
+// = 17 ruedas previas con datos.
+const BANDS_WINDOW = 16;
+const BANDS_DAYS = 40; // calendario, alcanza para cubrir 17+ ruedas hábiles
 const SMA_FAST_PERIOD = 20;
 const SMA_SLOW_PERIOD = 30;
+
+// Color de fondo del chart — debe coincidir con `surface-0` del Tailwind
+// para que el truco de "cover" del área inferior tape lo de abajo sin que
+// se note (queda visible sólo la franja entre upper y lower).
+const CHART_BG_COLOR = "#0a0e17";
+const BAND_FILL_COLOR = "rgba(168, 85, 247, 0.18)";
+const BAND_LINE_COLOR = "rgba(168, 85, 247, 0.85)";
 
 // BYMA: rueda 10:30 a 17:00 ART (UTC-3, sin DST)
 const SESSION_OPEN_UTC_H = 13;
@@ -147,47 +159,16 @@ function buildSlots(historical: HistoricalCandle[]): {
   return { slots, byBucket };
 }
 
-interface BandPoint {
-  upper: number;
-  lower: number;
-}
-
 /**
- * Bollinger sobre los `close` de las velas reales de la lista de slots
- * (ignora whitespace). Usa stddev poblacional, que es la convención clásica.
+ * Devuelve la fecha "YYYY-MM-DD" en ART (UTC-3, sin DST) de un slot.
+ * Se usa para mapear cada bucket a la rueda a la que pertenece.
  */
-function computeBands(
-  slots: Slot[],
-  period: number,
-  multiplier: number,
-): Map<number, BandPoint> {
-  const bands = new Map<number, BandPoint>();
-  const closes: number[] = [];
-
-  for (let i = 0; i < slots.length; i++) {
-    const c = slots[i].candle;
-    if (!c) continue;
-    closes.push(c.close);
-    if (closes.length < period) continue;
-
-    let sum = 0;
-    for (let k = closes.length - period; k < closes.length; k++) sum += closes[k];
-    const mean = sum / period;
-
-    let varSum = 0;
-    for (let k = closes.length - period; k < closes.length; k++) {
-      const d = closes[k] - mean;
-      varSum += d * d;
-    }
-    const stddev = Math.sqrt(varSum / period);
-
-    bands.set(i, {
-      upper: mean + multiplier * stddev,
-      lower: mean - multiplier * stddev,
-    });
-  }
-
-  return bands;
+function slotDateKey(realStart: number): string {
+  const art = new Date((realStart - 3 * 3600) * 1000);
+  const y = art.getUTCFullYear();
+  const m = String(art.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(art.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /**
@@ -231,7 +212,8 @@ function computeSMA(slots: Slot[], period: number): Map<number, number> {
     if (closes.length < period) continue;
 
     let sum = 0;
-    for (let k = closes.length - period; k < closes.length; k++) sum += closes[k];
+    for (let k = closes.length - period; k < closes.length; k++)
+      sum += closes[k];
     sma.set(i, sum / period);
   }
 
@@ -265,8 +247,16 @@ const RatioChart = () => {
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const upperBandSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const lowerBandSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  // Truco para sombrear sólo la franja entre upper y lower:
+  //  - upperBandAreaRef: área semi-transparente que llena DESDE la línea
+  //    superior hacia abajo hasta el borde inferior del price scale.
+  //  - lowerBandCoverRef: área OPACA con el color de fondo del chart, llena
+  //    desde la línea inferior hacia abajo y "tapa" la parte de la upper area
+  //    que sobresale por debajo de la lower line. Resultado: sólo la franja
+  //    entre las dos líneas queda coloreada. Las velas/SMAs se agregan
+  //    después y quedan por encima.
+  const upperBandAreaRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const lowerBandCoverRef = useRef<ISeriesApi<"Area"> | null>(null);
   const smaFastSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const smaSlowSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
@@ -274,6 +264,10 @@ const RatioChart = () => {
   const byBucketRef = useRef<Map<number, number>>(new Map());
   const priceLinesRef = useRef<IPriceLine[]>([]);
   const currentPairIdRef = useRef<string | null>(null);
+  // Banda diaria por fecha local ART ("YYYY-MM-DD" → upper/lower).
+  const dailyBandsRef = useRef<Map<string, { upper: number; lower: number }>>(
+    new Map(),
+  );
 
   // Re-pinta toda la serie + bandas a partir del estado actual de los slots.
   const redraw = () => {
@@ -281,8 +275,8 @@ const RatioChart = () => {
     if (slots.length === 0) {
       candleSeriesRef.current?.setData([]);
       lineSeriesRef.current?.setData([]);
-      upperBandSeriesRef.current?.setData([]);
-      lowerBandSeriesRef.current?.setData([]);
+      upperBandAreaRef.current?.setData([]);
+      lowerBandCoverRef.current?.setData([]);
       smaFastSeriesRef.current?.setData([]);
       smaSlowSeriesRef.current?.setData([]);
       return;
@@ -310,18 +304,18 @@ const RatioChart = () => {
       lineSeriesRef.current.setData(data);
     }
 
-    // Bollinger
-    const bands = computeBands(slots, BAND_PERIOD, BAND_STDDEV);
-    const upperData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
-      const b = bands.get(i);
+    // Bandas diarias: cada slot busca la banda de su rueda (ART date).
+    const bands = dailyBandsRef.current;
+    const upperData: (AreaData | WhitespaceData)[] = slots.map((s) => {
+      const b = bands.get(slotDateKey(s.realStart));
       return b ? { time: s.chartTime, value: b.upper } : { time: s.chartTime };
     });
-    const lowerData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
-      const b = bands.get(i);
+    const lowerData: (AreaData | WhitespaceData)[] = slots.map((s) => {
+      const b = bands.get(slotDateKey(s.realStart));
       return b ? { time: s.chartTime, value: b.lower } : { time: s.chartTime };
     });
-    upperBandSeriesRef.current?.setData(upperData);
-    lowerBandSeriesRef.current?.setData(lowerData);
+    upperBandAreaRef.current?.setData(upperData);
+    lowerBandCoverRef.current?.setData(lowerData);
 
     // SMA 20 / SMA 30
     const smaFast = computeSMA(slots, SMA_FAST_PERIOD);
@@ -354,7 +348,9 @@ const RatioChart = () => {
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "transparent" },
+        // El truco del cover (área inferior opaca con el color de fondo)
+        // requiere un fondo SÓLIDO; con `transparent` se ve a través.
+        background: { type: ColorType.Solid, color: CHART_BG_COLOR },
         textColor: "#94a3b8",
         fontFamily: "JetBrains Mono, monospace",
       },
@@ -404,20 +400,30 @@ const RatioChart = () => {
 
     chartRef.current = chart;
 
-    // Bandas Bollinger (siempre visibles, encima de la serie principal)
-    upperBandSeriesRef.current = chart.addLineSeries({
-      color: "rgba(168, 85, 247, 0.85)",
+    // Bandas diarias (avg high/low de las últimas N ruedas).
+    // 1° upper area: gradiente plano que llena de la línea para abajo.
+    // 2° lower cover: área OPACA con el color de fondo del chart, llena
+    //    desde la línea inferior hacia abajo y tapa el sobrante de la
+    //    upper area, dejando coloreada sólo la franja entre ambas.
+    upperBandAreaRef.current = chart.addAreaSeries({
+      topColor: BAND_FILL_COLOR,
+      bottomColor: BAND_FILL_COLOR,
+      lineColor: BAND_LINE_COLOR,
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
-      lastValueVisible: false,
+      lastValueVisible: true,
       priceLineVisible: false,
+      title: `Banda sup ${BANDS_WINDOW}d`,
     });
-    lowerBandSeriesRef.current = chart.addLineSeries({
-      color: "rgba(168, 85, 247, 0.85)",
+    lowerBandCoverRef.current = chart.addAreaSeries({
+      topColor: CHART_BG_COLOR,
+      bottomColor: CHART_BG_COLOR,
+      lineColor: BAND_LINE_COLOR,
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
-      lastValueVisible: false,
+      lastValueVisible: true,
       priceLineVisible: false,
+      title: `Banda inf ${BANDS_WINDOW}d`,
     });
 
     // SMA rápida (20) y lenta (30)
@@ -453,8 +459,8 @@ const RatioChart = () => {
       chartRef.current = null;
       candleSeriesRef.current = null;
       lineSeriesRef.current = null;
-      upperBandSeriesRef.current = null;
-      lowerBandSeriesRef.current = null;
+      upperBandAreaRef.current = null;
+      lowerBandCoverRef.current = null;
       smaFastSeriesRef.current = null;
       smaSlowSeriesRef.current = null;
     };
@@ -529,6 +535,7 @@ const RatioChart = () => {
     currentPairIdRef.current = selectedPairId;
     slotsRef.current = [];
     byBucketRef.current = new Map();
+    dailyBandsRef.current = new Map();
     redraw();
 
     if (!selectedPairId) return;
@@ -539,16 +546,40 @@ const RatioChart = () => {
     const toMs = now + 24 * 3600 * 1000; // un día de buffer
     const fromIso = new Date(fromMs).toISOString();
     const toIso = new Date(toMs).toISOString();
-    const limit = SESSIONS_TO_SHOW * BUCKETS_PER_SESSION + BAND_PERIOD + 50;
+    const limit = SESSIONS_TO_SHOW * BUCKETS_PER_SESSION + 50;
 
-    fetchPairCandles(pairIdAtFetchStart, {
-      timeframe: "5m",
-      from: fromIso,
-      to: toIso,
-      limit,
-    })
-      .then((apiCandles) => {
+    Promise.all([
+      fetchPairCandles(pairIdAtFetchStart, {
+        timeframe: "5m",
+        from: fromIso,
+        to: toIso,
+        limit,
+      }),
+      fetchPairDailyBands(pairIdAtFetchStart, {
+        window: BANDS_WINDOW,
+        days: BANDS_DAYS,
+      }).catch((err) => {
+        // Sin bandas el chart sigue siendo útil — sólo logueamos.
+        console.error("Error cargando bandas diarias", err);
+        return null;
+      }),
+    ])
+      .then(([apiCandles, bandsResp]) => {
         if (currentPairIdRef.current !== pairIdAtFetchStart) return;
+
+        // Bandas: indexar por fecha local ART.
+        const bandsMap = new Map<string, { upper: number; lower: number }>();
+        if (bandsResp) {
+          for (const row of bandsResp.series) {
+            if (row.upperBand !== null && row.lowerBand !== null) {
+              bandsMap.set(row.date, {
+                upper: row.upperBand,
+                lower: row.lowerBand,
+              });
+            }
+          }
+        }
+        dailyBandsRef.current = bandsMap;
 
         // Asc por openTime
         apiCandles.sort(
@@ -613,8 +644,8 @@ const RatioChart = () => {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted">
-            Ratio · velas 5m · semana + Bollinger ({BAND_PERIOD}, {BAND_STDDEV}σ)
-            · SMA {SMA_FAST_PERIOD}/{SMA_SLOW_PERIOD}
+            Ratio · velas 5m · semana + bandas dinámicas {BANDS_WINDOW}d · SMA{" "}
+            {SMA_FAST_PERIOD}/{SMA_SLOW_PERIOD}
           </div>
           <div className="text-lg font-semibold font-mono text-white">
             {pair ? pair.name : "Seleccioná un par"}

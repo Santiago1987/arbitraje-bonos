@@ -6,6 +6,7 @@ import type {
   PairStatistics,
   PairSummary,
   PairSnapshot,
+  PairDailyBands,
   AlertConfig,
   AlertCondition,
   AlertField,
@@ -144,6 +145,22 @@ export async function fetchPairCandles(
 
   const res = await request<ApiResponse<CandleAPI[]>>(
     `/pairs/${pairId}/candles?${params}`,
+  );
+  return res.data;
+}
+
+// ---- Daily bands (rolling avg de high/low de las últimas N ruedas) ----
+
+export async function fetchPairDailyBands(
+  pairId: string,
+  opts: { window?: number; days?: number } = {},
+): Promise<PairDailyBands> {
+  const params = new URLSearchParams();
+  if (opts.window !== undefined) params.set("window", String(opts.window));
+  if (opts.days !== undefined) params.set("days", String(opts.days));
+
+  const res = await request<ApiResponse<PairDailyBands>>(
+    `/pairs/${pairId}/daily/bands?${params}`,
   );
   return res.data;
 }
