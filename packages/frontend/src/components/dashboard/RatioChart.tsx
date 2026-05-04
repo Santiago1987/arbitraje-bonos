@@ -20,7 +20,7 @@ import { fetchPairCandles, fetchPairDailyBands } from "../../services/api";
 type ChartMode = "candles" | "line";
 
 const BUCKET_SECONDS = 5 * 60;
-const SESSIONS_TO_SHOW = 6; // sesión actual + 5 anteriores
+const SESSIONS_TO_SHOW = 21; // sesión actual + 20 anteriores
 const HISTORY_LOOKBACK_DAYS = 9; // calendario, para cubrir feriados/finde
 // Cantidad de deltas que promedia la fórmula de bandas (ver el handler de
 // /api/pairs/:id/daily/bands para la fórmula completa). Cada delta consume
@@ -29,7 +29,7 @@ const HISTORY_LOOKBACK_DAYS = 9; // calendario, para cubrir feriados/finde
 const BANDS_WINDOW = 16;
 const BANDS_DAYS = 40; // calendario, alcanza para cubrir 17+ ruedas hábiles
 const SMA_FAST_PERIOD = 20;
-const SMA_SLOW_PERIOD = 30;
+const SMA_SLOW_PERIOD = 200;
 
 // Color de fondo del chart — debe coincidir con `surface-0` del Tailwind
 // para que el truco de "cover" del área inferior tape lo de abajo sin que

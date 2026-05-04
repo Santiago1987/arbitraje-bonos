@@ -2,24 +2,13 @@ import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./components/dashboard/Dashboard";
+import ChartsView from "./components/charts/ChartsView";
 import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./store/marketStore";
 import { fetchBonds, fetchPairs } from "./services/api";
 import { initWS, closeWS, subscribeToPairs } from "./services/wsClient";
 
 type LiveMap = Record<string, PairLiveData>;
-
-// Placeholders para las vistas que vas a ir construyendo
-function ChartsPage() {
-  return (
-    <div className="text-muted text-center py-20">
-      <p className="text-lg">Gráficos - Próximamente</p>
-      <p className="text-sm mt-2">
-        Acá vas a ver los charts interactivos de cada par
-      </p>
-    </div>
-  );
-}
 
 function SettingsPage() {
   return (
@@ -89,7 +78,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
-          <Route path="charts" element={<ChartsPage />} />
+          <Route path="charts" element={<ChartsView />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

@@ -18,6 +18,10 @@ import {
   candleQueryService,
   SUPPORTED_TIMEFRAMES,
 } from "../services/candle-query.service.js";
+import {
+  getBondDailyCandles,
+  getRatioDailyCandles,
+} from "../services/bond-candles.service.js";
 import { wsServer } from "../websocket/ws-server.js";
 import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
 import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
@@ -77,6 +81,26 @@ const candlesQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().min(1).max(5000).default(500),
+});
+
+const settlementSchema = z.enum(["CI", "24hs", "48hs"]);
+
+const bondCandlesQuerySchema = z.object({
+  ticker: z.string().min(1),
+  settlement: settlementSchema,
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().min(1).max(2000).default(1000),
+});
+
+const ratioCandlesQuerySchema = z.object({
+  tickerA: z.string().min(1),
+  settlementA: settlementSchema,
+  tickerB: z.string().min(1),
+  settlementB: settlementSchema,
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().min(1).max(2000).default(1000),
 });
 
 // ============================================================
@@ -259,6 +283,57 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       const candles = await candleQueryService.getCandles({
         pairId: req.params.id,
         timeframe: query.data.timeframe,
+        from: query.data.from ? new Date(query.data.from) : undefined,
+        to: query.data.to ? new Date(query.data.to) : undefined,
+        limit: query.data.limit,
+      });
+
+      return { success: true, data: candles };
+    },
+  );
+
+  // ---- Bond daily candles (vela diaria de un bono individual) ----
+  // Agrega `BondSnapshot` por día local y devuelve OHLC del campo `price`.
+  // Usado por la vista de gráficos cuando se elige sólo el activo A.
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/bonds/candles",
+    async (req, reply) => {
+      const query = bondCandlesQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: query.error.format() });
+      }
+
+      const candles = await getBondDailyCandles({
+        ticker: query.data.ticker,
+        settlement: query.data.settlement,
+        from: query.data.from ? new Date(query.data.from) : undefined,
+        to: query.data.to ? new Date(query.data.to) : undefined,
+        limit: query.data.limit,
+      });
+
+      return { success: true, data: candles };
+    },
+  );
+
+  // ---- Ratio daily candles (vela diaria del cociente A/B) ----
+  // Joinea `BondSnapshot` de A y B en buckets de 1 minuto, calcula ratio por
+  // bucket y rolea a OHLC diario. Funciona con cualquier combinación A/B,
+  // no requiere que exista un BondPair configurado.
+  app.get<{ Querystring: Record<string, string> }>(
+    "/api/ratio/candles",
+    async (req, reply) => {
+      const query = ratioCandlesQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: query.error.format() });
+      }
+
+      const candles = await getRatioDailyCandles({
+        a: { ticker: query.data.tickerA, settlement: query.data.settlementA },
+        b: { ticker: query.data.tickerB, settlement: query.data.settlementB },
         from: query.data.from ? new Date(query.data.from) : undefined,
         to: query.data.to ? new Date(query.data.to) : undefined,
         limit: query.data.limit,

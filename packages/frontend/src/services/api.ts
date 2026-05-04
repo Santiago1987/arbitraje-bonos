@@ -149,6 +149,54 @@ export async function fetchPairCandles(
   return res.data;
 }
 
+// ---- Bond / Ratio daily candles (vista de gráficos por activo) ----
+
+export async function fetchBondCandles(opts: {
+  ticker: string;
+  settlement: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<CandleAPI[]> {
+  const params = new URLSearchParams({
+    ticker: opts.ticker,
+    settlement: opts.settlement,
+  });
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  if (opts.limit) params.set("limit", String(opts.limit));
+
+  const res = await request<ApiResponse<CandleAPI[]>>(
+    `/bonds/candles?${params}`,
+  );
+  return res.data;
+}
+
+export async function fetchRatioCandles(opts: {
+  tickerA: string;
+  settlementA: string;
+  tickerB: string;
+  settlementB: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<CandleAPI[]> {
+  const params = new URLSearchParams({
+    tickerA: opts.tickerA,
+    settlementA: opts.settlementA,
+    tickerB: opts.tickerB,
+    settlementB: opts.settlementB,
+  });
+  if (opts.from) params.set("from", opts.from);
+  if (opts.to) params.set("to", opts.to);
+  if (opts.limit) params.set("limit", String(opts.limit));
+
+  const res = await request<ApiResponse<CandleAPI[]>>(
+    `/ratio/candles?${params}`,
+  );
+  return res.data;
+}
+
 // ---- Daily bands (rolling avg de high/low de las últimas N ruedas) ----
 
 export async function fetchPairDailyBands(
