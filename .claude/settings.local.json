@@ -9,7 +9,11 @@
       "Bash(pnpm --filter backend exec tsc --noEmit)",
       "Bash(npx -p typescript@5.5 tsc --noEmit -p tsconfig.json)",
       "Bash(./node_modules/.bin/tsc --version)",
-      "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.check.json)"
+      "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.check.json)",
+      "Bash(pnpm --filter shared build)",
+      "Bash(pnpm --filter frontend exec tsc --noEmit)",
+      "Bash(pnpm --filter backend exec tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --outDir packages/backend/dist --rootDir packages/backend/src packages/backend/src/services/arbitrage-operations.service.ts packages/backend/src/models/index.ts)",
+      "Bash(node e:/Proyectos/arbitraje-bonos/packages/backend/verify-pnl.mjs)"
     ]
   }
 }

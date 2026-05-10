@@ -21,15 +21,29 @@ type ChartMode = "candles" | "line";
 
 const BUCKET_SECONDS = 5 * 60;
 const SESSIONS_TO_SHOW = 21; // sesión actual + 20 anteriores
-const HISTORY_LOOKBACK_DAYS = 9; // calendario, para cubrir feriados/finde
+// Calendario, alcanza para 21+ ruedas hábiles + el warmup necesario para que
+// la SMA200 (≈ 200 / 74 ≈ 2.7 ruedas regulares) llegue a las primeras velas
+// visibles con valor calculado.
+const HISTORY_LOOKBACK_DAYS = 35;
 // Cantidad de deltas que promedia la fórmula de bandas (ver el handler de
 // /api/pairs/:id/daily/bands para la fórmula completa). Cada delta consume
 // 2 ruedas, así que la primera fila con banda válida necesita BANDS_WINDOW+1
 // = 17 ruedas previas con datos.
 const BANDS_WINDOW = 16;
-const BANDS_DAYS = 40; // calendario, alcanza para cubrir 17+ ruedas hábiles
-const SMA_FAST_PERIOD = 20;
-const SMA_SLOW_PERIOD = 200;
+// Calendario, alcanza para 17+ ruedas hábiles para las bandas + 21 ruedas
+// hábiles que necesitamos para el promedio mensual.
+const BANDS_DAYS = 50;
+const SMA_PERIOD = 200;
+const BB_STD_DEV = 2;
+// Cantidad de ruedas que promediamos para la línea horizontal "promedio mes".
+const MONTH_AVG_SESSIONS = 21;
+
+// Fase 'regular' del backend: la rueda BYMA (10:30-17:00 ART) menos
+// warmup/cooldown (default 10 min cada uno) ⇒ 10:40-16:50 ART.
+// Mantener en sincronía con SESSION_WARMUP_MINUTES / SESSION_COOLDOWN_MINUTES
+// del backend (ver packages/backend/src/config/index.ts).
+const SESSION_WARMUP_MINUTES = 10;
+const SESSION_COOLDOWN_MINUTES = 10;
 
 // Color de fondo del chart — debe coincidir con `surface-0` del Tailwind
 // para que el truco de "cover" del área inferior tape lo de abajo sin que
@@ -198,26 +212,72 @@ function buildSessionMarkers(slots: Slot[]): SeriesMarker<UTCTimestamp>[] {
 }
 
 /**
- * Media móvil simple sobre los `close` de las velas reales (ignora whitespace).
- * Devuelve un Map indexado por posición del slot para alinear con el chartTime.
+ * `true` si el bucket cae dentro de la fase 'regular' de la rueda
+ * (10:30 + warmup) a (17:00 - cooldown) en ART. Sólo estas velas se usan
+ * para SMA y Bollinger Bands.
  */
-function computeSMA(slots: Slot[], period: number): Map<number, number> {
+function isRegularSession(realStart: number): boolean {
+  const utcSecOfDay = ((realStart % 86400) + 86400) % 86400;
+  const regularOpenSec =
+    SESSION_OPEN_UTC_H * 3600 +
+    SESSION_OPEN_UTC_M * 60 +
+    SESSION_WARMUP_MINUTES * 60;
+  const regularCloseSec =
+    SESSION_CLOSE_UTC_H * 3600 +
+    SESSION_CLOSE_UTC_M * 60 -
+    SESSION_COOLDOWN_MINUTES * 60;
+  return utcSecOfDay >= regularOpenSec && utcSecOfDay < regularCloseSec;
+}
+
+/**
+ * SMA + Bollinger Bands (±k·σ) sobre los `close` de las velas regulares.
+ * Devuelve Maps indexados por posición del slot para alinear con el chartTime.
+ * Las velas fuera de la fase 'regular' (warmup/cooldown) no entran en la
+ * ventana — esto matchea cómo el backend computa `avgClose`.
+ */
+function computeSMAandBB(
+  slots: Slot[],
+  period: number,
+  stdDev: number,
+): {
+  sma: Map<number, number>;
+  upperBB: Map<number, number>;
+  lowerBB: Map<number, number>;
+} {
   const sma = new Map<number, number>();
+  const upperBB = new Map<number, number>();
+  const lowerBB = new Map<number, number>();
   const closes: number[] = [];
+  // Mantenemos en paralelo los índices de slot que aportaron cada close para
+  // poder mapear la SMA/BB de vuelta a la posición correcta del chart.
+  const slotIdx: number[] = [];
 
   for (let i = 0; i < slots.length; i++) {
     const c = slots[i].candle;
     if (!c) continue;
+    if (!isRegularSession(slots[i].realStart)) continue;
     closes.push(c.close);
+    slotIdx.push(i);
     if (closes.length < period) continue;
 
     let sum = 0;
     for (let k = closes.length - period; k < closes.length; k++)
       sum += closes[k];
-    sma.set(i, sum / period);
+    const mean = sum / period;
+
+    let sqSum = 0;
+    for (let k = closes.length - period; k < closes.length; k++) {
+      const diff = closes[k] - mean;
+      sqSum += diff * diff;
+    }
+    const sigma = Math.sqrt(sqSum / period);
+
+    sma.set(i, mean);
+    upperBB.set(i, mean + stdDev * sigma);
+    lowerBB.set(i, mean - stdDev * sigma);
   }
 
-  return sma;
+  return { sma, upperBB, lowerBB };
 }
 
 const RatioChart = () => {
@@ -257,17 +317,25 @@ const RatioChart = () => {
   //    después y quedan por encima.
   const upperBandAreaRef = useRef<ISeriesApi<"Area"> | null>(null);
   const lowerBandCoverRef = useRef<ISeriesApi<"Area"> | null>(null);
-  const smaFastSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  const smaSlowSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   const slotsRef = useRef<Slot[]>([]);
   const byBucketRef = useRef<Map<number, number>>(new Map());
   const priceLinesRef = useRef<IPriceLine[]>([]);
+  const avgPriceLinesRef = useRef<IPriceLine[]>([]);
   const currentPairIdRef = useRef<string | null>(null);
   // Banda diaria por fecha local ART ("YYYY-MM-DD" → upper/lower).
   const dailyBandsRef = useRef<Map<string, { upper: number; lower: number }>>(
     new Map(),
   );
+  // Promedios de cierre regular por rueda — usados para las líneas
+  // horizontales (rueda anterior / promedio mes).
+  const [dailyAvgs, setDailyAvgs] = useState<{
+    prevDay: number | null;
+    month: number | null;
+  }>({ prevDay: null, month: null });
 
   // Re-pinta toda la serie + bandas a partir del estado actual de los slots.
   const redraw = () => {
@@ -277,8 +345,9 @@ const RatioChart = () => {
       lineSeriesRef.current?.setData([]);
       upperBandAreaRef.current?.setData([]);
       lowerBandCoverRef.current?.setData([]);
-      smaFastSeriesRef.current?.setData([]);
-      smaSlowSeriesRef.current?.setData([]);
+      smaSeriesRef.current?.setData([]);
+      bbUpperSeriesRef.current?.setData([]);
+      bbLowerSeriesRef.current?.setData([]);
       return;
     }
 
@@ -317,23 +386,24 @@ const RatioChart = () => {
     upperBandAreaRef.current?.setData(upperData);
     lowerBandCoverRef.current?.setData(lowerData);
 
-    // SMA 20 / SMA 30
-    const smaFast = computeSMA(slots, SMA_FAST_PERIOD);
-    const smaSlow = computeSMA(slots, SMA_SLOW_PERIOD);
-    const smaFastData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
-      const v = smaFast.get(i);
-      return v !== undefined
-        ? { time: s.chartTime, value: v }
-        : { time: s.chartTime };
-    });
-    const smaSlowData: (LineData | WhitespaceData)[] = slots.map((s, i) => {
-      const v = smaSlow.get(i);
-      return v !== undefined
-        ? { time: s.chartTime, value: v }
-        : { time: s.chartTime };
-    });
-    smaFastSeriesRef.current?.setData(smaFastData);
-    smaSlowSeriesRef.current?.setData(smaSlowData);
+    // SMA 200 + Bollinger Bands (sólo velas regulares, ver computeSMAandBB).
+    const { sma, upperBB, lowerBB } = computeSMAandBB(
+      slots,
+      SMA_PERIOD,
+      BB_STD_DEV,
+    );
+    const toLineData = (
+      values: Map<number, number>,
+    ): (LineData | WhitespaceData)[] =>
+      slots.map((s, i) => {
+        const v = values.get(i);
+        return v !== undefined
+          ? { time: s.chartTime, value: v }
+          : { time: s.chartTime };
+      });
+    smaSeriesRef.current?.setData(toLineData(sma));
+    bbUpperSeriesRef.current?.setData(toLineData(upperBB));
+    bbLowerSeriesRef.current?.setData(toLineData(lowerBB));
 
     // Markers de inicio de rueda en la serie activa.
     const markers = buildSessionMarkers(slots);
@@ -426,22 +496,32 @@ const RatioChart = () => {
       title: `Banda inf ${BANDS_WINDOW}d`,
     });
 
-    // SMA rápida (20) y lenta (30)
-    smaFastSeriesRef.current = chart.addLineSeries({
+    // SMA200 + Bollinger Bands (±BB_STD_DEV·σ) sobre los closes regulares.
+    smaSeriesRef.current = chart.addLineSeries({
+      color: "#f97316",
+      lineWidth: 2,
+      priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
+      lastValueVisible: false,
+      priceLineVisible: false,
+      title: `SMA${SMA_PERIOD}`,
+    });
+    bbUpperSeriesRef.current = chart.addLineSeries({
       color: "#facc15",
       lineWidth: 1,
+      lineStyle: LineStyle.Dotted,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      title: `SMA${SMA_FAST_PERIOD}`,
+      title: `BB+${BB_STD_DEV}σ`,
     });
-    smaSlowSeriesRef.current = chart.addLineSeries({
-      color: "#f97316",
+    bbLowerSeriesRef.current = chart.addLineSeries({
+      color: "#facc15",
       lineWidth: 1,
+      lineStyle: LineStyle.Dotted,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      title: `SMA${SMA_SLOW_PERIOD}`,
+      title: `BB-${BB_STD_DEV}σ`,
     });
 
     const handleResize = () => {
@@ -461,8 +541,9 @@ const RatioChart = () => {
       lineSeriesRef.current = null;
       upperBandAreaRef.current = null;
       lowerBandCoverRef.current = null;
-      smaFastSeriesRef.current = null;
-      smaSlowSeriesRef.current = null;
+      smaSeriesRef.current = null;
+      bbUpperSeriesRef.current = null;
+      bbLowerSeriesRef.current = null;
     };
   }, []);
 
@@ -529,13 +610,51 @@ const RatioChart = () => {
     }
   }, [pairAlertConfigs, mode]);
 
-  // Cambiar de par: limpiar buffer y recargar histórico (semana + sesión actual).
+  // Líneas horizontales: promedio de la rueda anterior y promedio mes.
+  useEffect(() => {
+    const series =
+      mode === "candles" ? candleSeriesRef.current : lineSeriesRef.current;
+    if (!series) return;
+
+    for (const pl of avgPriceLinesRef.current) {
+      series.removePriceLine(pl);
+    }
+    avgPriceLinesRef.current = [];
+
+    if (dailyAvgs.prevDay !== null) {
+      avgPriceLinesRef.current.push(
+        series.createPriceLine({
+          price: dailyAvgs.prevDay,
+          color: "#F73C0C",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: `Prom. ant. ${dailyAvgs.prevDay.toFixed(5)}`,
+        }),
+      );
+    }
+    if (dailyAvgs.month !== null) {
+      avgPriceLinesRef.current.push(
+        series.createPriceLine({
+          price: dailyAvgs.month,
+          color: "#a3e635",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: `Prom. ${MONTH_AVG_SESSIONS}r ${dailyAvgs.month.toFixed(5)}`,
+        }),
+      );
+    }
+  }, [dailyAvgs, mode]);
+
+  // Cambiar de par: limpiar buffer y recargar histórico (21 ruedas + warmup).
   useEffect(() => {
     if (currentPairIdRef.current === selectedPairId) return;
     currentPairIdRef.current = selectedPairId;
     slotsRef.current = [];
     byBucketRef.current = new Map();
     dailyBandsRef.current = new Map();
+    setDailyAvgs({ prevDay: null, month: null });
     redraw();
 
     if (!selectedPairId) return;
@@ -569,6 +688,9 @@ const RatioChart = () => {
 
         // Bandas: indexar por fecha local ART.
         const bandsMap = new Map<string, { upper: number; lower: number }>();
+        // avgClose por fecha (sólo ruedas con dato real, excluye la fila
+        // sintética de hoy que viene con avgClose=null).
+        const avgCloseByDate: Array<{ date: string; avgClose: number }> = [];
         if (bandsResp) {
           for (const row of bandsResp.series) {
             if (row.upperBand !== null && row.lowerBand !== null) {
@@ -577,9 +699,31 @@ const RatioChart = () => {
                 lower: row.lowerBand,
               });
             }
+            if (row.avgClose !== null) {
+              avgCloseByDate.push({ date: row.date, avgClose: row.avgClose });
+            }
           }
         }
         dailyBandsRef.current = bandsMap;
+
+        // Línea horizontal "rueda anterior": avgClose de la última rueda
+        // cerrada (excluye hoy si todavía está en curso).
+        // "Promedio mes": promedio de las últimas MONTH_AVG_SESSIONS ruedas.
+        const todayKey = new Date(Date.now() - 3 * 3600 * 1000)
+          .toISOString()
+          .slice(0, 10);
+        const closedRows = avgCloseByDate.filter((r) => r.date < todayKey);
+        const prevDay =
+          closedRows.length > 0
+            ? closedRows[closedRows.length - 1].avgClose
+            : null;
+        const monthSlice = closedRows.slice(-MONTH_AVG_SESSIONS);
+        const month =
+          monthSlice.length > 0
+            ? monthSlice.reduce((acc, r) => acc + r.avgClose, 0) /
+              monthSlice.length
+            : null;
+        setDailyAvgs({ prevDay, month });
 
         // Asc por openTime
         apiCandles.sort(
@@ -600,11 +744,23 @@ const RatioChart = () => {
         byBucketRef.current = byBucket;
         redraw();
 
-        // Foco en la rueda actual + algo del día anterior
+        // Foco en las últimas SESSIONS_TO_SHOW ruedas (incluye la actual).
+        // Iteramos hacia atrás contando fechas distintas porque los slots no
+        // son densos respecto al calendario (sólo contienen buckets reales
+        // + los de hoy), así que multiplicar por BUCKETS_PER_SESSION sería
+        // una aproximación grosera.
         const chart = chartRef.current;
         if (chart && slots.length > 0) {
           const lastIdx = slots.length - 1;
-          const fromIdx = Math.max(0, lastIdx - BUCKETS_PER_SESSION * 2);
+          const seenDates = new Set<string>();
+          let fromIdx = 0;
+          for (let i = lastIdx; i >= 0; i--) {
+            seenDates.add(slotDateKey(slots[i].realStart));
+            if (seenDates.size > SESSIONS_TO_SHOW) {
+              fromIdx = i + 1;
+              break;
+            }
+          }
           chart.timeScale().setVisibleLogicalRange({
             from: fromIdx,
             to: lastIdx + 1,
@@ -644,8 +800,8 @@ const RatioChart = () => {
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="text-xs uppercase tracking-wider text-muted">
-            Ratio · velas 5m · semana + bandas dinámicas {BANDS_WINDOW}d · SMA{" "}
-            {SMA_FAST_PERIOD}/{SMA_SLOW_PERIOD}
+            Ratio · velas 5m · {SESSIONS_TO_SHOW}r · bandas {BANDS_WINDOW}d ·
+            SMA{SMA_PERIOD} · BB ±{BB_STD_DEV}σ
           </div>
           <div className="text-lg font-semibold font-mono text-white">
             {pair ? pair.name : "Seleccioná un par"}

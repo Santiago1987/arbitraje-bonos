@@ -153,6 +153,7 @@ export interface PairDailyBands {
     date: string;
     high: number | null;
     low: number | null;
+    avgClose: number | null;
     upperBand: number | null;
     lowerBand: number | null;
   }>;
@@ -277,4 +278,62 @@ export interface PaginatedResponse<T> extends ApiResponse<T[]> {
   total: number;
   page: number;
   limit: number;
+}
+
+// --- Operaciones de arbitraje (registro manual de trades) ---
+
+export type ExerciseStatus = "open" | "closed";
+
+// "buy_ratio"  = compré el ratio = compré A y vendí B
+// "sell_ratio" = vendí el ratio  = vendí A y compré B
+export type OperationSide = "buy_ratio" | "sell_ratio";
+
+export interface Exercise {
+  id: string;
+  pairId: string;
+  pairName: string;
+  name: string;
+  status: ExerciseStatus;
+  openedAt: Date;
+  closedAt: Date | null;
+  openingNotes: string;
+  closingNotes: string;
+  realizedPnL: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ArbitrageOperation {
+  id: string;
+  exerciseId: string;
+  pairId: string;
+  timestamp: Date;
+  side: OperationSide;
+  nominalsA: number; // positivo = compré A, negativo = vendí A
+  priceA: number;
+  nominalsB: number; // positivo = compré B, negativo = vendí B
+  priceB: number;
+  executedRatio: number; // priceA / priceB
+  notes: string;
+}
+
+// Marca cuándo una operación cerró un ciclo (saldo neto vuelve a 0).
+export interface ExerciseCycle {
+  closedAtOperationId: string;
+  closedAt: Date;
+  pnl: number;
+}
+
+export interface ExerciseState {
+  netNominalsA: number;
+  netNominalsB: number;
+  realizedPnL: number;
+  openCycleCashFlow: number; // cash flow del ciclo aún abierto (0 si está plano)
+  cycles: ExerciseCycle[];
+}
+
+export interface ExerciseDetail {
+  exercise: Exercise;
+  operations: ArbitrageOperation[];
+  state: ExerciseState;
 }

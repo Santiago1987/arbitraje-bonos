@@ -9,12 +9,14 @@ import RatioChart from "./RatioChart";
 import RightSidebar, { type ActivePanel } from "./RightSidebar";
 import AlertsPanel from "./AlertsPanel";
 import PairsPanel from "./PairsPanel";
+import OperationsPanel from "./OperationsPanel";
 
 export function Dashboard() {
   const pairs = useMarketStore((s) => s.pairs);
   const loading = useMarketStore((s) => s.pairsLoading);
   const alerts = useMarketStore((s) => s.recentAlerts);
   const setAlertConfigs = useMarketStore((s) => s.setAlertConfigs);
+  const selectedPairId = useMarketStore((s) => s.selectedPairId);
 
   const [showBymaModal, setShowBymaModal] = useState(false);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
@@ -48,6 +50,7 @@ export function Dashboard() {
         activePanel={activePanel}
         onOpenAlerts={() => togglePanel("alerts")}
         onOpenPairs={() => togglePanel("pairs")}
+        onOpenOperations={() => togglePanel("operations")}
       />
 
       <AlertsPanel
@@ -56,6 +59,11 @@ export function Dashboard() {
       />
       <PairsPanel
         open={activePanel === "pairs"}
+        onClose={() => setActivePanel(null)}
+      />
+      <OperationsPanel
+        open={activePanel === "operations"}
+        pairId={selectedPairId}
         onClose={() => setActivePanel(null)}
       />
     </div>

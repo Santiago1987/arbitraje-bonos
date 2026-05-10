@@ -22,6 +22,7 @@ import {
   getBondDailyCandles,
   getRatioDailyCandles,
 } from "../services/bond-candles.service.js";
+import { arbitrageOperationsService } from "../services/arbitrage-operations.service.js";
 import { wsServer } from "../websocket/ws-server.js";
 import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
 import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
@@ -101,6 +102,37 @@ const ratioCandlesQuerySchema = z.object({
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   limit: z.coerce.number().min(1).max(2000).default(1000),
+});
+
+const openExerciseSchema = z.object({
+  name: z.string().min(1),
+  openingNotes: z.string().optional().default(""),
+});
+
+const closeExerciseSchema = z.object({
+  closingNotes: z.string().optional().default(""),
+});
+
+const operationSideSchema = z.enum(["buy_ratio", "sell_ratio"]);
+
+const createOperationSchema = z.object({
+  side: operationSideSchema,
+  nominalsA: z.number().positive(),
+  nominalsB: z.number().positive(),
+  priceA: z.number().positive(),
+  priceB: z.number().positive(),
+  timestamp: z.string().datetime().optional(),
+  notes: z.string().optional().default(""),
+});
+
+const updateOperationSchema = z.object({
+  side: operationSideSchema.optional(),
+  nominalsA: z.number().positive().optional(),
+  nominalsB: z.number().positive().optional(),
+  priceA: z.number().positive().optional(),
+  priceB: z.number().positive().optional(),
+  timestamp: z.string().datetime().optional(),
+  notes: z.string().optional(),
 });
 
 // ============================================================
@@ -459,6 +491,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           date: row.date,
           high: row.high,
           low: row.low,
+          avgClose: row.avgClose,
           upperBand,
           lowerBand,
         };
@@ -488,6 +521,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
           date: todayKey,
           high: null,
           low: null,
+          avgClose: null,
           upperBand: baseAvgClose + sumDeltaHigh / w,
           lowerBand: baseAvgClose + sumDeltaLow / w,
         });
@@ -619,4 +653,177 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       data: pairCalculatorService.getAllLiveData(),
     };
   });
+
+  // ============================================================
+  // Ejercicios y operaciones de arbitraje
+  // ============================================================
+  // Un "ejercicio" es un período manualmente abierto/cerrado por el usuario
+  // sobre un par (ej. "Marzo 2026"). Sólo puede haber uno abierto por par.
+  // Cada operación tiene dos patas (compra de un bono + venta del otro).
+  // El PnL realizado se acumula por ciclos: cada vez que el saldo neto de
+  // ambos bonos vuelve a 0, se cierra un ciclo y se suma su cash flow.
+  // ============================================================
+
+  app.get<{ Params: { id: string } }>(
+    "/api/pairs/:id/exercises",
+    async (req) => {
+      const exercises = await arbitrageOperationsService.listExercisesForPair(
+        req.params.id,
+      );
+      return { success: true, data: exercises };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/api/pairs/:id/exercises",
+    async (req, reply) => {
+      const parsed = openExerciseSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: parsed.error.format() });
+      }
+
+      try {
+        const exercise = await arbitrageOperationsService.openExercise(
+          req.params.id,
+          parsed.data.name,
+          parsed.data.openingNotes,
+        );
+        return reply.status(201).send({ success: true, data: exercise });
+      } catch (err) {
+        return reply.status(400).send({
+          success: false,
+          error: err instanceof Error ? err.message : "Error al abrir ejercicio",
+        });
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/api/exercises/:id",
+    async (req, reply) => {
+      const detail = await arbitrageOperationsService.getExerciseDetail(
+        req.params.id,
+      );
+      if (!detail) {
+        return reply
+          .status(404)
+          .send({ success: false, error: "Ejercicio no encontrado" });
+      }
+      return { success: true, data: detail };
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/api/exercises/:id/close",
+    async (req, reply) => {
+      const parsed = closeExerciseSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: parsed.error.format() });
+      }
+
+      try {
+        const exercise = await arbitrageOperationsService.closeExercise(
+          req.params.id,
+          parsed.data.closingNotes,
+        );
+        return { success: true, data: exercise };
+      } catch (err) {
+        return reply.status(400).send({
+          success: false,
+          error: err instanceof Error ? err.message : "Error al cerrar ejercicio",
+        });
+      }
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/api/exercises/:id/operations",
+    async (req, reply) => {
+      const parsed = createOperationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: parsed.error.format() });
+      }
+
+      try {
+        const op = await arbitrageOperationsService.createOperation(
+          req.params.id,
+          {
+            side: parsed.data.side,
+            nominalsA: parsed.data.nominalsA,
+            nominalsB: parsed.data.nominalsB,
+            priceA: parsed.data.priceA,
+            priceB: parsed.data.priceB,
+            timestamp: parsed.data.timestamp
+              ? new Date(parsed.data.timestamp)
+              : undefined,
+            notes: parsed.data.notes,
+          },
+        );
+        return reply.status(201).send({ success: true, data: op });
+      } catch (err) {
+        return reply.status(400).send({
+          success: false,
+          error: err instanceof Error ? err.message : "Error al crear operación",
+        });
+      }
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/api/operations/:id",
+    async (req, reply) => {
+      const parsed = updateOperationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ success: false, error: parsed.error.format() });
+      }
+
+      try {
+        const op = await arbitrageOperationsService.updateOperation(
+          req.params.id,
+          {
+            side: parsed.data.side,
+            nominalsA: parsed.data.nominalsA,
+            nominalsB: parsed.data.nominalsB,
+            priceA: parsed.data.priceA,
+            priceB: parsed.data.priceB,
+            timestamp: parsed.data.timestamp
+              ? new Date(parsed.data.timestamp)
+              : undefined,
+            notes: parsed.data.notes,
+          },
+        );
+        return { success: true, data: op };
+      } catch (err) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            err instanceof Error ? err.message : "Error al editar operación",
+        });
+      }
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    "/api/operations/:id",
+    async (req, reply) => {
+      try {
+        await arbitrageOperationsService.deleteOperation(req.params.id);
+        return { success: true };
+      } catch (err) {
+        return reply.status(400).send({
+          success: false,
+          error:
+            err instanceof Error ? err.message : "Error al borrar operación",
+        });
+      }
+    },
+  );
 }

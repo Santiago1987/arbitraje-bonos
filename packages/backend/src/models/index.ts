@@ -9,6 +9,8 @@ import type {
   OHLCV,
   PairDaily,
   SessionPhase,
+  Exercise,
+  ArbitrageOperation,
 } from "@arbitraje/shared";
 
 const SESSION_PHASES: SessionPhase[] = [
@@ -278,3 +280,73 @@ export const AlertConfigModel = mongoose.model<AlertConfigDoc>(
   alertConfigSchema,
   "alert_configs",
 );
+
+// ============================================================
+// Exercise - período de operatoria sobre un par (apertura/cierre manual)
+// ============================================================
+interface ExerciseDoc extends Omit<Exercise, "id">, Document {}
+
+const exerciseSchema = new Schema<ExerciseDoc>(
+  {
+    pairId: { type: String, required: true, index: true },
+    pairName: { type: String, required: true },
+    name: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ["open", "closed"],
+      default: "open",
+      required: true,
+    },
+    openedAt: { type: Date, required: true },
+    closedAt: { type: Date, default: null },
+    openingNotes: { type: String, default: "" },
+    closingNotes: { type: String, default: "" },
+    realizedPnL: { type: Number, default: 0 },
+  },
+  { timestamps: true },
+);
+
+exerciseSchema.index({ pairId: 1, status: 1, openedAt: -1 });
+
+export const ExerciseModel = mongoose.model<ExerciseDoc>(
+  "Exercise",
+  exerciseSchema,
+  "exercises",
+);
+
+// ============================================================
+// ArbitrageOperation - operación con dos patas (compra A + venta B, o viceversa)
+// ============================================================
+interface ArbitrageOperationDoc
+  extends Omit<ArbitrageOperation, "id">,
+    Document {}
+
+const arbitrageOperationSchema = new Schema<ArbitrageOperationDoc>(
+  {
+    exerciseId: { type: String, required: true, index: true },
+    pairId: { type: String, required: true, index: true },
+    timestamp: { type: Date, required: true },
+    side: {
+      type: String,
+      enum: ["buy_ratio", "sell_ratio"],
+      required: true,
+    },
+    // Signo positivo = compré, negativo = vendí
+    nominalsA: { type: Number, required: true },
+    priceA: { type: Number, required: true },
+    nominalsB: { type: Number, required: true },
+    priceB: { type: Number, required: true },
+    executedRatio: { type: Number, required: true },
+    notes: { type: String, default: "" },
+  },
+  { timestamps: true },
+);
+
+arbitrageOperationSchema.index({ exerciseId: 1, timestamp: 1 });
+
+export const ArbitrageOperationModel =
+  mongoose.model<ArbitrageOperationDoc>(
+    "ArbitrageOperation",
+    arbitrageOperationSchema,
+    "arbitrage_operations",
+  );

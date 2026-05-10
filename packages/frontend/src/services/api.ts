@@ -13,6 +13,10 @@ import type {
   StatsWindow,
   OHLCV,
   TimeframeKey,
+  ArbitrageOperation,
+  Exercise,
+  ExerciseDetail,
+  OperationSide,
 } from "@arbitraje/shared";
 
 const BASE = "http://localhost:3001/api";
@@ -280,4 +284,100 @@ export async function disconnectByma(): Promise<Record<string, unknown>> {
 
 export async function fetchHealth(): Promise<Record<string, unknown>> {
   return request("/health");
+}
+
+// ---- Ejercicios y operaciones de arbitraje ----
+
+export async function fetchExercisesForPair(
+  pairId: string,
+): Promise<Exercise[]> {
+  const res = await request<ApiResponse<Exercise[]>>(
+    `/pairs/${pairId}/exercises`,
+  );
+  return res.data;
+}
+
+export async function openExercise(
+  pairId: string,
+  payload: { name: string; openingNotes?: string },
+): Promise<Exercise> {
+  const res = await request<ApiResponse<Exercise>>(
+    `/pairs/${pairId}/exercises`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+  return res.data;
+}
+
+export async function fetchExerciseDetail(
+  exerciseId: string,
+): Promise<ExerciseDetail> {
+  const res = await request<ApiResponse<ExerciseDetail>>(
+    `/exercises/${exerciseId}`,
+  );
+  return res.data;
+}
+
+export async function closeExercise(
+  exerciseId: string,
+  closingNotes?: string,
+): Promise<Exercise> {
+  const res = await request<ApiResponse<Exercise>>(
+    `/exercises/${exerciseId}/close`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ closingNotes: closingNotes ?? "" }),
+    },
+  );
+  return res.data;
+}
+
+export async function createOperation(
+  exerciseId: string,
+  payload: {
+    side: OperationSide;
+    nominalsA: number;
+    nominalsB: number;
+    priceA: number;
+    priceB: number;
+    timestamp?: string;
+    notes?: string;
+  },
+): Promise<ArbitrageOperation> {
+  const res = await request<ApiResponse<ArbitrageOperation>>(
+    `/exercises/${exerciseId}/operations`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+  return res.data;
+}
+
+export async function updateOperation(
+  operationId: string,
+  payload: {
+    side?: OperationSide;
+    nominalsA?: number;
+    nominalsB?: number;
+    priceA?: number;
+    priceB?: number;
+    timestamp?: string;
+    notes?: string;
+  },
+): Promise<ArbitrageOperation> {
+  const res = await request<ApiResponse<ArbitrageOperation>>(
+    `/operations/${operationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+  return res.data;
+}
+
+export async function deleteOperation(operationId: string): Promise<void> {
+  await request(`/operations/${operationId}`, { method: "DELETE" });
 }
