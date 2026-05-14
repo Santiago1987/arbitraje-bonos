@@ -13,7 +13,11 @@
       "Bash(pnpm --filter shared build)",
       "Bash(pnpm --filter frontend exec tsc --noEmit)",
       "Bash(pnpm --filter backend exec tsc --skipLibCheck --target ES2022 --module NodeNext --moduleResolution NodeNext --outDir packages/backend/dist --rootDir packages/backend/src packages/backend/src/services/arbitrage-operations.service.ts packages/backend/src/models/index.ts)",
-      "Bash(node e:/Proyectos/arbitraje-bonos/packages/backend/verify-pnl.mjs)"
+      "Bash(node e:/Proyectos/arbitraje-bonos/packages/backend/verify-pnl.mjs)",
+      "Bash(Get-ChildItem -Path \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\" -Recurse -File)",
+      "Bash(Select-Object FullName)",
+      "Bash(pnpm --filter frontend exec tsc -b --noEmit)",
+      "Bash(git stash *)"
     ]
   }
 }

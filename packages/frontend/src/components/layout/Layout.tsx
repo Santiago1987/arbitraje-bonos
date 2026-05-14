@@ -3,6 +3,7 @@ import { clsx } from "clsx";
 import {
   LayoutDashboard,
   LineChart,
+  LayoutGrid,
   Bell,
   Settings,
   Activity,
@@ -11,6 +12,7 @@ import {
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/charts", icon: LineChart, label: "Gráficos" },
+  { to: "/multicharts", icon: LayoutGrid, label: "MultiCharts" },
   { to: "/alerts", icon: Bell, label: "Alertas" },
   { to: "/settings", icon: Settings, label: "Configuración" },
 ];
@@ -60,7 +62,7 @@ export function Layout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <div className="w-full mx-auto">
+        <div className="w-full mx-auto h-[calc(100dvh-4.5rem)]">
           <Outlet />
         </div>
       </main>

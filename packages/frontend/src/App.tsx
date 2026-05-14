@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import ChartsView from "./components/charts/ChartsView";
+import MultiChartsView from "./components/multicharts/MultiChartsView";
 import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./store/marketStore";
 import { fetchBonds, fetchPairs } from "./services/api";
@@ -79,6 +80,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="charts" element={<ChartsView />} />
+          <Route path="multicharts" element={<MultiChartsView />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

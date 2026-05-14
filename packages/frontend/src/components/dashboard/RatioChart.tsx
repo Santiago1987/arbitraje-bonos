@@ -280,8 +280,22 @@ function computeSMAandBB(
   return { sma, upperBB, lowerBB };
 }
 
-const RatioChart = () => {
-  const selectedPairId = useMarketStore((s) => s.selectedPairId);
+interface RatioChartProps {
+  // Si se pasa, el chart usa este pairId en lugar del seleccionado en el store.
+  // Permite renderizar varios charts independientes (ver MultiChartsView).
+  pairId?: string;
+  // Altura del chart en px. Default 360 (preserva el uso original en Dashboard).
+  height?: number;
+}
+
+type PromColors = { promant: string; prommonth: string; SMA: string };
+
+const RatioChart = ({
+  pairId: pairIdProp,
+  height = 500,
+}: RatioChartProps = {}) => {
+  const storeSelectedPairId = useMarketStore((s) => s.selectedPairId);
+  const selectedPairId = pairIdProp ?? storeSelectedPairId;
   const pair = useMarketStore((s) =>
     s.pairs.find((p) => p.id === selectedPairId),
   );
@@ -302,6 +316,12 @@ const RatioChart = () => {
   );
 
   const [mode, setMode] = useState<ChartMode>("candles");
+
+  const promColors: PromColors = {
+    promant: "#02CF28",
+    prommonth: "#F20202",
+    SMA: "#f97316",
+  };
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -383,8 +403,8 @@ const RatioChart = () => {
       const b = bands.get(slotDateKey(s.realStart));
       return b ? { time: s.chartTime, value: b.lower } : { time: s.chartTime };
     });
-    upperBandAreaRef.current?.setData(upperData);
-    lowerBandCoverRef.current?.setData(lowerData);
+    //upperBandAreaRef.current?.setData(upperData); //ACCCCCCCCCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAA
+    //lowerBandCoverRef.current?.setData(lowerData);
 
     // SMA 200 + Bollinger Bands (sólo velas regulares, ver computeSMAandBB).
     const { sma, upperBB, lowerBB } = computeSMAandBB(
@@ -465,7 +485,7 @@ const RatioChart = () => {
         horzLine: { color: "#3b82f6", width: 1, style: LineStyle.Dashed },
       },
       width: containerRef.current.clientWidth,
-      height: 360,
+      height,
     });
 
     chartRef.current = chart;
@@ -503,25 +523,25 @@ const RatioChart = () => {
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      title: `SMA${SMA_PERIOD}`,
+      //title: `SMA${SMA_PERIOD}`,
     });
     bbUpperSeriesRef.current = chart.addLineSeries({
-      color: "#facc15",
+      color: "#FF0000",
       lineWidth: 1,
-      lineStyle: LineStyle.Dotted,
+      lineStyle: LineStyle.Solid,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      title: `BB+${BB_STD_DEV}σ`,
+      //title: `BB+${BB_STD_DEV}σ`,
     });
     bbLowerSeriesRef.current = chart.addLineSeries({
-      color: "#facc15",
+      color: "#FF0000",
       lineWidth: 1,
-      lineStyle: LineStyle.Dotted,
+      lineStyle: LineStyle.Solid,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      title: `BB-${BB_STD_DEV}σ`,
+      //title: `BB-${BB_STD_DEV}σ`,
     });
 
     const handleResize = () => {
@@ -546,6 +566,11 @@ const RatioChart = () => {
       bbLowerSeriesRef.current = null;
     };
   }, []);
+
+  // Re-aplicar altura cuando cambia el prop (MultiCharts redimensiona dinámicamente)
+  useEffect(() => {
+    chartRef.current?.applyOptions({ height });
+  }, [height]);
 
   // Intercambiar serie principal según el modo (vela/línea)
   useEffect(() => {
@@ -625,11 +650,11 @@ const RatioChart = () => {
       avgPriceLinesRef.current.push(
         series.createPriceLine({
           price: dailyAvgs.prevDay,
-          color: "#F73C0C",
+          color: promColors.promant,
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: `Prom. ant. ${dailyAvgs.prevDay.toFixed(5)}`,
+          //title: `Prom. ant. ${dailyAvgs.prevDay.toFixed(5)}`,
         }),
       );
     }
@@ -637,11 +662,11 @@ const RatioChart = () => {
       avgPriceLinesRef.current.push(
         series.createPriceLine({
           price: dailyAvgs.month,
-          color: "#a3e635",
+          color: promColors.prommonth,
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: `Prom. ${MONTH_AVG_SESSIONS}r ${dailyAvgs.month.toFixed(5)}`,
+          //title: `Prom. ${MONTH_AVG_SESSIONS}r ${dailyAvgs.month.toFixed(5)}`,
         }),
       );
     }
@@ -796,55 +821,77 @@ const RatioChart = () => {
   }, [live, selectedPairId, mode]);
 
   return (
-    <div className="border border-surface-3/30 rounded-lg p-2 mt-2">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted">
+    <div className="relative border border-surface-3/30 rounded-lg h-full">
+      <div className="absolute z-10 flex flex-col p-1 w-full">
+        <div className="flex flex-row">
+          <div className="flex text-lg font-semibold font-mono items-center text-white py-1 pl-1 pr-4">
+            {pair ? pair.name : "Seleccioná un par"}
+          </div>
+          <div className="flex items-center text-xs uppercase tracking-wider text-muted py-1 pr-4">
             Ratio · velas 5m · {SESSIONS_TO_SHOW}r · bandas {BANDS_WINDOW}d ·
             SMA{SMA_PERIOD} · BB ±{BB_STD_DEV}σ
           </div>
-          <div className="text-lg font-semibold font-mono text-white">
-            {pair ? pair.name : "Seleccioná un par"}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {live && pair && (
-            <div className="text-right font-mono">
-              <div className="text-xs text-muted">Último</div>
-              <div className="text-accent-cyan text-xl font-semibold">
-                {live.currentRatio?.toFixed(5)}
+          <div className="flex items-center py-1 pr-4">
+            {live && pair && (
+              <div className="text-right font-mono">
+                <div className="text-xs text-muted">Último</div>
+                <div className="text-accent-cyan text-xl font-semibold">
+                  {live.currentRatio?.toFixed(5)}
+                </div>
               </div>
+            )}
+            <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setMode("candles")}
+                className={clsx(
+                  "px-3 py-1 rounded transition-colors",
+                  mode === "candles"
+                    ? "bg-accent-blue/20 text-white"
+                    : "text-muted hover:text-white",
+                )}
+              >
+                Velas
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("line")}
+                className={clsx(
+                  "px-3 py-1 rounded transition-colors",
+                  mode === "line"
+                    ? "bg-accent-blue/20 text-white"
+                    : "text-muted hover:text-white",
+                )}
+              >
+                Línea
+              </button>
             </div>
-          )}
-          <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setMode("candles")}
-              className={clsx(
-                "px-3 py-1 rounded transition-colors",
-                mode === "candles"
-                  ? "bg-accent-blue/20 text-white"
-                  : "text-muted hover:text-white",
-              )}
-            >
-              Velas
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("line")}
-              className={clsx(
-                "px-3 py-1 rounded transition-colors",
-                mode === "line"
-                  ? "bg-accent-blue/20 text-white"
-                  : "text-muted hover:text-white",
-              )}
-            >
-              Línea
-            </button>
           </div>
         </div>
+        {pair && (
+          <div className="flex flex-col gap-1 w-[80px]">
+            <div
+              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+              style={{ backgroundColor: `${promColors.promant}` }}
+            >
+              Prom. ant.
+            </div>
+            <div
+              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+              style={{ backgroundColor: `${promColors.prommonth}` }}
+            >
+              Prom. ${MONTH_AVG_SESSIONS}r
+            </div>
+            <div
+              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+              style={{ backgroundColor: `${promColors.SMA}` }}
+            >
+              SMA{SMA_PERIOD}
+            </div>
+          </div>
+        )}
       </div>
-      <div ref={containerRef} className="w-full" />
+      <div ref={containerRef} className="w-full h-full" />
       {!selectedPairId && (
         <div className="text-center text-muted text-sm py-4">
           Tocá una fila en la tabla para ver su ratio en vivo.
