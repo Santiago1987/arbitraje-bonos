@@ -17,7 +17,13 @@
       "Bash(Get-ChildItem -Path \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\" -Recurse -File)",
       "Bash(Select-Object FullName)",
       "Bash(pnpm --filter frontend exec tsc -b --noEmit)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(node -e \"const lc = require\\('./node_modules/.pnpm/lightweight-charts@5.2.0/node_modules/lightweight-charts/dist/lightweight-charts.standalone.development.js'\\); console.log\\(Object.keys\\(lc\\).filter\\(k => /series/i.test\\(k\\)\\)\\)\")",
+      "Bash(Select-String -Path \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\node_modules\\\\.pnpm\\\\lightweight-charts@5.2.0\\\\node_modules\\\\lightweight-charts\\\\dist\\\\typings.d.ts\" -Pattern \"^export \\\\{\" -Context 0,30)",
+      "Bash(Select-Object -First 1)",
+      "Bash(node -e \"const p = require\\('./node_modules/.pnpm/lightweight-charts@5.2.0/node_modules/lightweight-charts/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, types: p.types, exports: p.exports}, null, 2\\)\\)\")",
+      "Bash(node -e \"const p = require\\('./packages/frontend/node_modules/lightweight-charts/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(Select-String \"lightweight\")"
     ]
   }
 }

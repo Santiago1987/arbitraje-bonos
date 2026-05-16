@@ -94,10 +94,10 @@ const legCashFlow = (signedNominals: number, price: number): number => {
 
 const OperationsPanel = ({ open, pairId, onClose }: Props) => {
   const pair = useMarketStore((s) =>
-    pairId ? s.pairs.find((p) => p.id === pairId) ?? null : null,
+    pairId ? (s.pairs.find((p) => p.id === pairId) ?? null) : null,
   );
   const live = useMarketStore((s) =>
-    pairId ? s.liveData[pairId] ?? null : null,
+    pairId ? (s.liveData[pairId] ?? null) : null,
   );
 
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -183,8 +183,7 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
   );
 
   // El detalle visible: el ejercicio abierto por default; o el viejo elegido.
-  const visibleExerciseId =
-    viewingExerciseId ?? openExerciseRow?.id ?? null;
+  const visibleExerciseId = viewingExerciseId ?? openExerciseRow?.id ?? null;
 
   // ---- Cargar ejercicios cuando se abre el panel o cambia el par ----
   useEffect(() => {
@@ -227,7 +226,9 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
 
   const cycleByOpId = useMemo(() => {
     if (!detail) return new Map<string, number>();
-    return new Map(detail.state.cycles.map((c) => [c.closedAtOperationId, c.pnl]));
+    return new Map(
+      detail.state.cycles.map((c) => [c.closedAtOperationId, c.pnl]),
+    );
   }, [detail]);
 
   const calculatedRatio = useMemo(() => {
@@ -401,13 +402,15 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
       {/* Drawer */}
       <aside
         className={clsx(
-          "absolute top-0 right-0 z-40 h-full w-[900px] max-w-[95vw] bg-surface-1 border-l border-surface-3/40 shadow-2xl flex flex-col transition-transform duration-200",
+          "absolute top-0 right-0 z-40 h-full w-225 max-w-[95vw] bg-surface-1 border-l border-surface-3/40 shadow-2xl flex flex-col transition-transform duration-200",
           open ? "translate-x-0" : "translate-x-full",
         )}
       >
         <header className="flex items-center justify-between px-4 py-3 border-b border-surface-3/40">
           <div>
-            <h2 className="text-base font-semibold">Operaciones de arbitraje</h2>
+            <h2 className="text-base font-semibold">
+              Operaciones de arbitraje
+            </h2>
             <p className="text-xs text-muted mt-0.5">
               {pair ? pair.name : "Seleccioná un par en la tabla"}
             </p>
@@ -872,7 +875,9 @@ const ExerciseHeader = ({
 
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div>
-          <div className="text-muted">Falta {/* operar */} en {tickerA}</div>
+          <div className="text-muted">
+            Falta {/* operar */} en {tickerA}
+          </div>
           <div
             className={clsx(
               "font-mono font-semibold",
@@ -887,7 +892,9 @@ const ExerciseHeader = ({
           </div>
         </div>
         <div>
-          <div className="text-muted">Falta {/* operar */} en {tickerB}</div>
+          <div className="text-muted">
+            Falta {/* operar */} en {tickerB}
+          </div>
           <div
             className={clsx(
               "font-mono font-semibold",
@@ -951,9 +958,7 @@ const LegInputs = ({
     >
       <div className="flex items-center justify-between text-[10px] uppercase tracking-wider">
         <span className="font-semibold">{ticker}</span>
-        <span
-          className={isSell ? "text-accent-red" : "text-accent-green"}
-        >
+        <span className={isSell ? "text-accent-red" : "text-accent-green"}>
           {action}
         </span>
       </div>

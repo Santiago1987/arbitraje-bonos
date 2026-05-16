@@ -26,6 +26,7 @@ async function bootstrap() {
   await app.register(cors, {
     origin: true, // En producción, restringir al dominio del front
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   });
 
   await app.register(websocket);

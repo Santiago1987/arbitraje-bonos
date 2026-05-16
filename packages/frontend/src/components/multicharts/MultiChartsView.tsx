@@ -75,12 +75,12 @@ export const MultiChartsView = () => {
   return (
     <div
       ref={gridRef}
-      className="grid grid-cols-2 grid-rows-3 p-2 h-[calc(100dvh-4rem)]"
+      className="grid grid-cols-2 grid-rows-3 h-[calc(100dvh-4rem)]"
     >
       {cellPairIds.map((pairId, idx) => (
         <div
           key={idx}
-          className="bg-surface-1 border border-surface-3/30 p-2 flex flex-col min-h-0 overflow-hidden"
+          className="bg-surface-1 border border-surface-3/30 flex flex-col min-h-0 overflow-hidden"
         >
           <PairCombobox
             value={pairId}

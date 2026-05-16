@@ -36,21 +36,22 @@ export function Dashboard() {
 
   return (
     <div className="relative flex h-full">
-      <div className="grid grid-cols-1 grid-rows-14 p-2 w-full">
-        <div className="row-span-2">
+      <div className="flex flex-col p-2 gap-2 w-full">
+        <div className="">
           <Header handleOnClickBymaModal={handleOnClickBymaModal} />
         </div>
-        {alerts.length > 0 && <Alerts alerts={alerts} />}
-        <div className="row-span-5">
+
+        <div className="">
           <BondsTable loading={loading} pairs={pairs} />
         </div>
-        <div className="row-span-6">
+        <div className="">
           <RatioChart />
           {showBymaModal && (
             <BYMAModal handleOnClickBymaModal={handleOnClickBymaModal} />
           )}
         </div>
       </div>
+      {alerts.length > 0 && <Alerts alerts={alerts} />}
 
       <RightSidebar
         activePanel={activePanel}

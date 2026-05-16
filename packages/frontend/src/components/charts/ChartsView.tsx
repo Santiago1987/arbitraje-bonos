@@ -4,6 +4,8 @@ import {
   createChart,
   ColorType,
   LineStyle,
+  CandlestickSeries,
+  LineSeries,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
@@ -208,7 +210,7 @@ const ChartsView = () => {
     avgPriceLineRef.current = null;
 
     if (mode === "candles") {
-      candleSeriesRef.current = chart.addCandlestickSeries({
+      candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
         upColor: "#22c55e",
         downColor: "#ef4444",
         borderUpColor: "#22c55e",
@@ -218,7 +220,7 @@ const ChartsView = () => {
         priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       });
     } else {
-      lineSeriesRef.current = chart.addLineSeries({
+      lineSeriesRef.current = chart.addSeries(LineSeries, {
         color: "#06b6d4",
         lineWidth: 2,
         priceFormat: { type: "price", precision: 5, minMove: 0.00001 },

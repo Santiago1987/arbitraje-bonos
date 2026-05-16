@@ -113,7 +113,7 @@ export const PairCombobox = ({ value, onChange, placeholder }: Props) => {
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-2 top-1 z-10 -translate-y-1/2 p-0.5 border border-surface-20/30 border-white text-white bg-surface-20/30
+          className="absolute right-2 top-3 z-10 -translate-y-1/2 p-0.5 border border-surface-20/30 border-white text-white bg-surface-20/30
           rounded hover:bg-surface-3 hover:text-white transition-colors"
           aria-label="Limpiar selección"
         >

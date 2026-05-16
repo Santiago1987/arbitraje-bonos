@@ -2,14 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   createChart,
+  createSeriesMarkers,
   ColorType,
   LineStyle,
+  AreaSeries,
+  LineSeries,
+  CandlestickSeries,
   type AreaData,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
   type ISeriesApi,
+  type ISeriesMarkersPluginApi,
   type LineData,
+  type Time,
   type SeriesMarker,
   type UTCTimestamp,
   type WhitespaceData,
@@ -48,7 +54,7 @@ const SESSION_COOLDOWN_MINUTES = 10;
 // Color de fondo del chart — debe coincidir con `surface-0` del Tailwind
 // para que el truco de "cover" del área inferior tape lo de abajo sin que
 // se note (queda visible sólo la franja entre upper y lower).
-const CHART_BG_COLOR = "#0a0e17";
+const CHART_BG_COLOR = "rgba(0,0,0,0)";
 const BAND_FILL_COLOR = "rgba(168, 85, 247, 0.18)";
 const BAND_LINE_COLOR = "rgba(168, 85, 247, 0.85)";
 
@@ -315,7 +321,7 @@ const RatioChart = ({
     [alertConfigs, selectedPairId],
   );
 
-  const [mode, setMode] = useState<ChartMode>("candles");
+  const [mode, setMode] = useState<ChartMode>("line");
 
   const promColors: PromColors = {
     promant: "#02CF28",
@@ -340,6 +346,7 @@ const RatioChart = ({
   const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const seriesMarkersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   const slotsRef = useRef<Slot[]>([]);
   const byBucketRef = useRef<Map<number, number>>(new Map());
@@ -429,7 +436,10 @@ const RatioChart = ({
     const markers = buildSessionMarkers(slots);
     const mainSeries =
       mode === "candles" ? candleSeriesRef.current : lineSeriesRef.current;
-    mainSeries?.setMarkers(markers);
+    seriesMarkersRef.current?.detach();
+    seriesMarkersRef.current = mainSeries
+      ? createSeriesMarkers(mainSeries, markers)
+      : null;
   };
 
   // Crear chart una sola vez
@@ -495,7 +505,7 @@ const RatioChart = ({
     // 2° lower cover: área OPACA con el color de fondo del chart, llena
     //    desde la línea inferior hacia abajo y tapa el sobrante de la
     //    upper area, dejando coloreada sólo la franja entre ambas.
-    upperBandAreaRef.current = chart.addAreaSeries({
+    upperBandAreaRef.current = chart.addSeries(AreaSeries, {
       topColor: BAND_FILL_COLOR,
       bottomColor: BAND_FILL_COLOR,
       lineColor: BAND_LINE_COLOR,
@@ -505,7 +515,7 @@ const RatioChart = ({
       priceLineVisible: false,
       title: `Banda sup ${BANDS_WINDOW}d`,
     });
-    lowerBandCoverRef.current = chart.addAreaSeries({
+    lowerBandCoverRef.current = chart.addSeries(AreaSeries, {
       topColor: CHART_BG_COLOR,
       bottomColor: CHART_BG_COLOR,
       lineColor: BAND_LINE_COLOR,
@@ -517,31 +527,28 @@ const RatioChart = ({
     });
 
     // SMA200 + Bollinger Bands (±BB_STD_DEV·σ) sobre los closes regulares.
-    smaSeriesRef.current = chart.addLineSeries({
+    smaSeriesRef.current = chart.addSeries(LineSeries, {
       color: "#f97316",
       lineWidth: 2,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      //title: `SMA${SMA_PERIOD}`,
     });
-    bbUpperSeriesRef.current = chart.addLineSeries({
+    bbUpperSeriesRef.current = chart.addSeries(LineSeries, {
       color: "#FF0000",
       lineWidth: 1,
       lineStyle: LineStyle.Solid,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      //title: `BB+${BB_STD_DEV}σ`,
     });
-    bbLowerSeriesRef.current = chart.addLineSeries({
+    bbLowerSeriesRef.current = chart.addSeries(LineSeries, {
       color: "#FF0000",
       lineWidth: 1,
       lineStyle: LineStyle.Solid,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: false,
       priceLineVisible: false,
-      //title: `BB-${BB_STD_DEV}σ`,
     });
 
     const handleResize = () => {
@@ -587,7 +594,7 @@ const RatioChart = ({
     }
 
     if (mode === "candles") {
-      candleSeriesRef.current = chart.addCandlestickSeries({
+      candleSeriesRef.current = chart.addSeries(CandlestickSeries, {
         upColor: "#22c55e",
         downColor: "#ef4444",
         borderUpColor: "#22c55e",
@@ -597,7 +604,7 @@ const RatioChart = ({
         priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       });
     } else {
-      lineSeriesRef.current = chart.addLineSeries({
+      lineSeriesRef.current = chart.addSeries(LineSeries, {
         color: "#06b6d4",
         lineWidth: 2,
         priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
@@ -629,7 +636,7 @@ const RatioChart = ({
         lineWidth: 1,
         lineStyle: LineStyle.Dotted,
         axisLabelVisible: true,
-        title: `${arrow} ${cfg.threshold.toFixed(5)}`,
+        title: `${arrow}`,
       });
       priceLinesRef.current.push(pl);
     }
@@ -822,7 +829,7 @@ const RatioChart = ({
 
   return (
     <div className="relative border border-surface-3/30 rounded-lg h-full">
-      <div className="absolute z-10 flex flex-col p-1 w-full">
+      <div className="absolute flex flex-col p-1">
         <div className="flex flex-row">
           <div className="flex text-lg font-semibold font-mono items-center text-white py-1 pl-1 pr-4">
             {pair ? pair.name : "Seleccioná un par"}
@@ -831,16 +838,16 @@ const RatioChart = ({
             Ratio · velas 5m · {SESSIONS_TO_SHOW}r · bandas {BANDS_WINDOW}d ·
             SMA{SMA_PERIOD} · BB ±{BB_STD_DEV}σ
           </div>
-          <div className="flex items-center py-1 pr-4">
+          <div className="flex items-center">
             {live && pair && (
-              <div className="text-right font-mono">
+              <div className="text-right font-mono pr-4">
                 <div className="text-xs text-muted">Último</div>
                 <div className="text-accent-cyan text-xl font-semibold">
                   {live.currentRatio?.toFixed(5)}
                 </div>
               </div>
             )}
-            <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium">
+            <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium z-20">
               <button
                 type="button"
                 onClick={() => setMode("candles")}
@@ -869,7 +876,7 @@ const RatioChart = ({
           </div>
         </div>
         {pair && (
-          <div className="flex flex-col gap-1 w-[80px]">
+          <div className="flex flex-col gap-1 w-25 pl-1">
             <div
               className="text-xs w-full font-medium font-mono text-white p-1 rounded"
               style={{ backgroundColor: `${promColors.promant}` }}
@@ -880,7 +887,7 @@ const RatioChart = ({
               className="text-xs w-full font-medium font-mono text-white p-1 rounded"
               style={{ backgroundColor: `${promColors.prommonth}` }}
             >
-              Prom. ${MONTH_AVG_SESSIONS}r
+              Prom. {MONTH_AVG_SESSIONS}r
             </div>
             <div
               className="text-xs w-full font-medium font-mono text-white p-1 rounded"
@@ -891,7 +898,7 @@ const RatioChart = ({
           </div>
         )}
       </div>
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full z-10" />
       {!selectedPairId && (
         <div className="text-center text-muted text-sm py-4">
           Tocá una fila en la tabla para ver su ratio en vivo.
