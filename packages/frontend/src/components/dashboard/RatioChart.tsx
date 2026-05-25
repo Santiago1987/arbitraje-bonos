@@ -5,10 +5,8 @@ import {
   createSeriesMarkers,
   ColorType,
   LineStyle,
-  AreaSeries,
   LineSeries,
   CandlestickSeries,
-  type AreaData,
   type CandlestickData,
   type IChartApi,
   type IPriceLine,
@@ -51,11 +49,7 @@ const MONTH_AVG_SESSIONS = 21;
 const SESSION_WARMUP_MINUTES = 10;
 const SESSION_COOLDOWN_MINUTES = 10;
 
-// Color de fondo del chart — debe coincidir con `surface-0` del Tailwind
-// para que el truco de "cover" del área inferior tape lo de abajo sin que
-// se note (queda visible sólo la franja entre upper y lower).
-const CHART_BG_COLOR = "rgba(0,0,0,0)";
-const BAND_FILL_COLOR = "rgba(168, 85, 247, 0.18)";
+const CHART_BG_COLOR = "#0a0e17";
 const BAND_LINE_COLOR = "rgba(168, 85, 247, 0.85)";
 
 // BYMA: rueda 10:30 a 17:00 ART (UTC-3, sin DST)
@@ -333,16 +327,8 @@ const RatioChart = ({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const lineSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
-  // Truco para sombrear sólo la franja entre upper y lower:
-  //  - upperBandAreaRef: área semi-transparente que llena DESDE la línea
-  //    superior hacia abajo hasta el borde inferior del price scale.
-  //  - lowerBandCoverRef: área OPACA con el color de fondo del chart, llena
-  //    desde la línea inferior hacia abajo y "tapa" la parte de la upper area
-  //    que sobresale por debajo de la lower line. Resultado: sólo la franja
-  //    entre las dos líneas queda coloreada. Las velas/SMAs se agregan
-  //    después y quedan por encima.
-  const upperBandAreaRef = useRef<ISeriesApi<"Area"> | null>(null);
-  const lowerBandCoverRef = useRef<ISeriesApi<"Area"> | null>(null);
+  const upperBandLineRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const lowerBandLineRef = useRef<ISeriesApi<"Line"> | null>(null);
   const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbUpperSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
   const bbLowerSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
@@ -370,8 +356,8 @@ const RatioChart = ({
     if (slots.length === 0) {
       candleSeriesRef.current?.setData([]);
       lineSeriesRef.current?.setData([]);
-      upperBandAreaRef.current?.setData([]);
-      lowerBandCoverRef.current?.setData([]);
+      upperBandLineRef.current?.setData([]);
+      lowerBandLineRef.current?.setData([]);
       smaSeriesRef.current?.setData([]);
       bbUpperSeriesRef.current?.setData([]);
       bbLowerSeriesRef.current?.setData([]);
@@ -402,16 +388,16 @@ const RatioChart = ({
 
     // Bandas diarias: cada slot busca la banda de su rueda (ART date).
     const bands = dailyBandsRef.current;
-    const upperData: (AreaData | WhitespaceData)[] = slots.map((s) => {
+    const upperData: (LineData | WhitespaceData)[] = slots.map((s) => {
       const b = bands.get(slotDateKey(s.realStart));
       return b ? { time: s.chartTime, value: b.upper } : { time: s.chartTime };
     });
-    const lowerData: (AreaData | WhitespaceData)[] = slots.map((s) => {
+    const lowerData: (LineData | WhitespaceData)[] = slots.map((s) => {
       const b = bands.get(slotDateKey(s.realStart));
       return b ? { time: s.chartTime, value: b.lower } : { time: s.chartTime };
     });
-    //upperBandAreaRef.current?.setData(upperData); //ACCCCCCCCCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAAAAAA
-    //lowerBandCoverRef.current?.setData(lowerData);
+    upperBandLineRef.current?.setData(upperData);
+    lowerBandLineRef.current?.setData(lowerData);
 
     // SMA 200 + Bollinger Bands (sólo velas regulares, ver computeSMAandBB).
     const { sma, upperBB, lowerBB } = computeSMAandBB(
@@ -448,8 +434,6 @@ const RatioChart = ({
 
     const chart = createChart(containerRef.current, {
       layout: {
-        // El truco del cover (área inferior opaca con el color de fondo)
-        // requiere un fondo SÓLIDO; con `transparent` se ve a través.
         background: { type: ColorType.Solid, color: CHART_BG_COLOR },
         textColor: "#94a3b8",
         fontFamily: "JetBrains Mono, monospace",
@@ -500,30 +484,21 @@ const RatioChart = ({
 
     chartRef.current = chart;
 
-    // Bandas diarias (avg high/low de las últimas N ruedas).
-    // 1° upper area: gradiente plano que llena de la línea para abajo.
-    // 2° lower cover: área OPACA con el color de fondo del chart, llena
-    //    desde la línea inferior hacia abajo y tapa el sobrante de la
-    //    upper area, dejando coloreada sólo la franja entre ambas.
-    upperBandAreaRef.current = chart.addSeries(AreaSeries, {
-      topColor: BAND_FILL_COLOR,
-      bottomColor: BAND_FILL_COLOR,
-      lineColor: BAND_LINE_COLOR,
+    // Bandas diarias (fórmula del Excel: avgClose(D-1) ± avg de deltas
+    // high/low contra avgClose anterior — ver handler /api/pairs/:id/daily/bands).
+    upperBandLineRef.current = chart.addSeries(LineSeries, {
+      color: BAND_LINE_COLOR,
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: true,
       priceLineVisible: false,
-      title: `Banda sup ${BANDS_WINDOW}d`,
     });
-    lowerBandCoverRef.current = chart.addSeries(AreaSeries, {
-      topColor: CHART_BG_COLOR,
-      bottomColor: CHART_BG_COLOR,
-      lineColor: BAND_LINE_COLOR,
+    lowerBandLineRef.current = chart.addSeries(LineSeries, {
+      color: BAND_LINE_COLOR,
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: true,
       priceLineVisible: false,
-      title: `Banda inf ${BANDS_WINDOW}d`,
     });
 
     // SMA200 + Bollinger Bands (±BB_STD_DEV·σ) sobre los closes regulares.
@@ -566,8 +541,8 @@ const RatioChart = ({
       chartRef.current = null;
       candleSeriesRef.current = null;
       lineSeriesRef.current = null;
-      upperBandAreaRef.current = null;
-      lowerBandCoverRef.current = null;
+      upperBandLineRef.current = null;
+      lowerBandLineRef.current = null;
       smaSeriesRef.current = null;
       bbUpperSeriesRef.current = null;
       bbLowerSeriesRef.current = null;
@@ -829,7 +804,7 @@ const RatioChart = ({
 
   return (
     <div className="relative border border-surface-3/30 rounded-lg h-full">
-      <div className="absolute flex flex-col p-1">
+      <div className="absolute flex flex-col p-1 z-10 pointer-events-none">
         <div className="flex flex-row">
           <div className="flex text-lg font-semibold font-mono items-center text-white py-1 pl-1 pr-4">
             {pair ? pair.name : "Seleccioná un par"}
@@ -847,7 +822,7 @@ const RatioChart = ({
                 </div>
               </div>
             )}
-            <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium z-20">
+            <div className="flex rounded-md bg-surface-2/50 p-0.5 text-xs font-medium z-20 pointer-events-auto">
               <button
                 type="button"
                 onClick={() => setMode("candles")}
@@ -898,7 +873,7 @@ const RatioChart = ({
           </div>
         )}
       </div>
-      <div ref={containerRef} className="w-full h-full z-10" />
+      <div ref={containerRef} className="w-full h-full" />
       {!selectedPairId && (
         <div className="text-center text-muted text-sm py-4">
           Tocá una fila en la tabla para ver su ratio en vivo.
