@@ -29,8 +29,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(error.error ?? `HTTP ${res.status}`);
+    const body = await res.json().catch(() => null);
+    const raw = body?.error;
+    let message: string;
+    if (typeof raw === "string") {
+      message = raw;
+    } else if (raw && typeof raw === "object") {
+      // Zod's .format() devuelve un árbol anidado. Aplanamos a "campo: motivo".
+      const issues: string[] = [];
+      const walk = (node: unknown, path: string) => {
+        if (!node || typeof node !== "object") return;
+        for (const [key, value] of Object.entries(node)) {
+          if (key === "_errors" && Array.isArray(value) && value.length > 0) {
+            issues.push(`${path || "(root)"}: ${value.join(", ")}`);
+          } else {
+            walk(value, path ? `${path}.${key}` : key);
+          }
+        }
+      };
+      walk(raw, "");
+      message = issues.length
+        ? issues.join(" | ")
+        : JSON.stringify(raw);
+    } else {
+      message = res.statusText || `HTTP ${res.status}`;
+    }
+    console.error(`[api] ${res.status} ${path}`, body);
+    throw new Error(message);
   }
 
   return res.json();
