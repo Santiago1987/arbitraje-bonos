@@ -17,6 +17,8 @@ import type {
   Exercise,
   ExerciseDetail,
   OperationSide,
+  AppSettings,
+  RatioChartSettings,
 } from "@arbitraje/shared";
 
 const BASE = "http://localhost:3001/api";
@@ -405,4 +407,21 @@ export async function updateOperation(
 
 export async function deleteOperation(operationId: string): Promise<void> {
   await request(`/operations/${operationId}`, { method: "DELETE" });
+}
+
+// ---- App Settings ----
+
+export async function fetchAppSettings(): Promise<AppSettings> {
+  const res = await request<ApiResponse<AppSettings>>("/settings");
+  return res.data;
+}
+
+export async function updateAppSettings(patch: {
+  ratioChart?: Partial<RatioChartSettings>;
+}): Promise<AppSettings> {
+  const res = await request<ApiResponse<AppSettings>>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
+  return res.data;
 }

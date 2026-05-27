@@ -23,7 +23,22 @@
       "Bash(Select-Object -First 1)",
       "Bash(node -e \"const p = require\\('./node_modules/.pnpm/lightweight-charts@5.2.0/node_modules/lightweight-charts/package.json'\\); console.log\\(JSON.stringify\\({main: p.main, module: p.module, types: p.types, exports: p.exports}, null, 2\\)\\)\")",
       "Bash(node -e \"const p = require\\('./packages/frontend/node_modules/lightweight-charts/package.json'\\); console.log\\(p.version\\)\")",
-      "Bash(Select-String \"lightweight\")"
+      "Bash(Select-String \"lightweight\")",
+      "Bash(xargs grep -l \"app.settings\\\\|AppSettings\\\\|app_settings\")",
+      "Bash(xargs grep -l \"app.settings\\\\|AppSettings\\\\|RatioChartConfig\\\\|ChartSettings\")",
+      "PowerShell(npx tsc -p packages\\\\frontend\\\\tsconfig.json --noEmit 2>&1)",
+      "Bash(npx vite *)",
+      "Bash(./node_modules/.bin/tsc --noEmit --skipLibCheck)",
+      "Bash(pnpm --filter backend exec tsc --noEmit --skipLibCheck)",
+      "Bash(timeout 8 npx tsx --no-warnings -e \"import\\('./src/models/index.ts'\\).then\\(m => { console.log\\('models OK:', Object.keys\\(m\\).filter\\(k => k.endsWith\\('Model'\\)\\)\\); process.exit\\(0\\); }\\).catch\\(e => { console.error\\('models FAIL:', e.message\\); process.exit\\(1\\); }\\)\")",
+      "Bash(timeout 8 npx tsx --no-warnings -e \"import\\('./src/routes/index.ts'\\).then\\(m => { console.log\\('routes OK:', typeof m.registerRoutes\\); process.exit\\(0\\); }\\).catch\\(e => { console.error\\('routes FAIL:', e.message\\); process.exit\\(1\\); }\\)\")",
+      "Bash(timeout 8 npx tsx --no-warnings -e \"import\\('@arbitraje/shared'\\).then\\(m => { console.log\\('keys:', Object.keys\\(m\\).slice\\(-5\\)\\); process.exit\\(0\\); }\\).catch\\(e => { console.error\\('FAIL:', e.message\\); process.exit\\(1\\); }\\)\")",
+      "Bash(timeout 8 npx tsx /tmp/test-import.ts)",
+      "Bash(timeout 10 npx tsx /tmp/test-routes.ts)",
+      "Bash(timeout 10 npx tsx test-routes-import.ts)",
+      "Bash(stat -c '%y %n' node_modules/@arbitraje/shared/dist/index.js node_modules/@arbitraje/shared/src/index.ts ../../shared/dist/index.js ../../shared/src/index.ts 2>&1)",
+      "Read(//e/Proyectos/arbitraje-bonos/packages/backend/**)",
+      "Bash(timeout 8 npx tsx test-debug.ts)"
     ]
   }
 }

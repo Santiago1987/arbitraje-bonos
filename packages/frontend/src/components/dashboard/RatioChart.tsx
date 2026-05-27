@@ -18,12 +18,13 @@ import {
   type UTCTimestamp,
   type WhitespaceData,
 } from "lightweight-charts";
+import type { LineStyleType, TimeframeKey } from "@arbitraje/shared";
 import { useMarketStore } from "../../store/marketStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { fetchPairCandles, fetchPairDailyBands } from "../../services/api";
 
 type ChartMode = "candles" | "line";
 
-const BUCKET_SECONDS = 5 * 60;
 const SESSIONS_TO_SHOW = 21; // sesión actual + 20 anteriores
 // Calendario, alcanza para 21+ ruedas hábiles + el warmup necesario para que
 // la SMA200 (≈ 200 / 74 ≈ 2.7 ruedas regulares) llegue a las primeras velas
@@ -37,8 +38,6 @@ const BANDS_WINDOW = 16;
 // Calendario, alcanza para 17+ ruedas hábiles para las bandas + 21 ruedas
 // hábiles que necesitamos para el promedio mensual.
 const BANDS_DAYS = 50;
-const SMA_PERIOD = 200;
-const BB_STD_DEV = 2;
 // Cantidad de ruedas que promediamos para la línea horizontal "promedio mes".
 const MONTH_AVG_SESSIONS = 21;
 
@@ -50,7 +49,6 @@ const SESSION_WARMUP_MINUTES = 10;
 const SESSION_COOLDOWN_MINUTES = 10;
 
 const CHART_BG_COLOR = "#0a0e17";
-const BAND_LINE_COLOR = "rgba(168, 85, 247, 0.85)";
 
 // BYMA: rueda 10:30 a 17:00 ART (UTC-3, sin DST)
 const SESSION_OPEN_UTC_H = 13;
@@ -60,7 +58,25 @@ const SESSION_CLOSE_UTC_M = 0;
 const SESSION_DURATION_SEC =
   (SESSION_CLOSE_UTC_H - SESSION_OPEN_UTC_H) * 3600 +
   (SESSION_CLOSE_UTC_M - SESSION_OPEN_UTC_M) * 60;
-const BUCKETS_PER_SESSION = SESSION_DURATION_SEC / BUCKET_SECONDS; // 78
+
+const TIMEFRAME_SECONDS: Record<TimeframeKey, number> = {
+  "1m": 60,
+  "5m": 300,
+  "15m": 900,
+  "1h": 3600,
+  "4h": 14400,
+  "1d": 86400,
+};
+
+const timeframeToSeconds = (tf: TimeframeKey): number =>
+  TIMEFRAME_SECONDS[tf] ?? 300;
+
+const mapLineStyle = (s: LineStyleType): LineStyle =>
+  s === "dashed"
+    ? LineStyle.Dashed
+    : s === "dotted"
+      ? LineStyle.Dotted
+      : LineStyle.Solid;
 
 // Anchor arbitrario para el eje "lógico". El chartTime no representa un
 // instante real — es un índice secuencial empacado en un UTCTimestamp para
@@ -80,8 +96,8 @@ interface Slot {
   candle?: Candle;
 }
 
-const floorToBucket = (tsSec: number) =>
-  Math.floor(tsSec / BUCKET_SECONDS) * BUCKET_SECONDS;
+const floorToBucket = (tsSec: number, bucketSec: number) =>
+  Math.floor(tsSec / bucketSec) * bucketSec;
 
 const sessionOpenUtcSec = (refMs: number): number => {
   // Día calendario en ART (UTC-3) → primer bucket (10:30 ART = 13:30 UTC).
@@ -124,10 +140,14 @@ interface HistoricalCandle extends Candle {
  * Cada slot recibe un chartTime secuencial: chartTime[i] = anchor + i * 5m.
  * Esto comprime visualmente el eje (sin huecos nocturnos / fin de semana).
  */
-function buildSlots(historical: HistoricalCandle[]): {
+function buildSlots(
+  historical: HistoricalCandle[],
+  opts: { bucketSec: number; bucketsPerSession: number },
+): {
   slots: Slot[];
   byBucket: Map<number, number>; // realStart → índice del slot
 } {
+  const { bucketSec, bucketsPerSession } = opts;
   const fromHistory = new Map<number, Candle>();
   for (const c of historical) {
     fromHistory.set(c.realStart, {
@@ -148,8 +168,8 @@ function buildSlots(historical: HistoricalCandle[]): {
   const todayBuckets: number[] = [];
   if (isTradingDay) {
     const todaySessionStart = sessionOpenUtcSec(Date.now());
-    for (let i = 0; i < BUCKETS_PER_SESSION; i++) {
-      todayBuckets.push(todaySessionStart + i * BUCKET_SECONDS);
+    for (let i = 0; i < bucketsPerSession; i++) {
+      todayBuckets.push(todaySessionStart + i * bucketSec);
     }
   }
 
@@ -163,7 +183,7 @@ function buildSlots(historical: HistoricalCandle[]): {
   for (let i = 0; i < allBuckets.length; i++) {
     const realStart = allBuckets[i];
     slots.push({
-      chartTime: (CHART_TIME_ANCHOR + i * BUCKET_SECONDS) as UTCTimestamp,
+      chartTime: (CHART_TIME_ANCHOR + i * bucketSec) as UTCTimestamp,
       realStart,
       candle: fromHistory.get(realStart),
     });
@@ -234,11 +254,15 @@ function isRegularSession(realStart: number): boolean {
  * Devuelve Maps indexados por posición del slot para alinear con el chartTime.
  * Las velas fuera de la fase 'regular' (warmup/cooldown) no entran en la
  * ventana — esto matchea cómo el backend computa `avgClose`.
+ *
+ * SMA y BB pueden tener distintos `period` (configurables): la SMA dibujada
+ * usa `smaPeriod`; el centro de las BB se calcula internamente con `bbPeriod`.
  */
 function computeSMAandBB(
   slots: Slot[],
-  period: number,
-  stdDev: number,
+  smaPeriod: number,
+  bbPeriod: number,
+  bbStdDev: number,
 ): {
   sma: Map<number, number>;
   upperBB: Map<number, number>;
@@ -248,33 +272,38 @@ function computeSMAandBB(
   const upperBB = new Map<number, number>();
   const lowerBB = new Map<number, number>();
   const closes: number[] = [];
-  // Mantenemos en paralelo los índices de slot que aportaron cada close para
-  // poder mapear la SMA/BB de vuelta a la posición correcta del chart.
-  const slotIdx: number[] = [];
 
   for (let i = 0; i < slots.length; i++) {
     const c = slots[i].candle;
     if (!c) continue;
     if (!isRegularSession(slots[i].realStart)) continue;
     closes.push(c.close);
-    slotIdx.push(i);
-    if (closes.length < period) continue;
 
-    let sum = 0;
-    for (let k = closes.length - period; k < closes.length; k++)
-      sum += closes[k];
-    const mean = sum / period;
-
-    let sqSum = 0;
-    for (let k = closes.length - period; k < closes.length; k++) {
-      const diff = closes[k] - mean;
-      sqSum += diff * diff;
+    // SMA visible.
+    if (closes.length >= smaPeriod) {
+      let sum = 0;
+      for (let k = closes.length - smaPeriod; k < closes.length; k++)
+        sum += closes[k];
+      sma.set(i, sum / smaPeriod);
     }
-    const sigma = Math.sqrt(sqSum / period);
 
-    sma.set(i, mean);
-    upperBB.set(i, mean + stdDev * sigma);
-    lowerBB.set(i, mean - stdDev * sigma);
+    // Bollinger Bands.
+    if (closes.length >= bbPeriod) {
+      let sum = 0;
+      for (let k = closes.length - bbPeriod; k < closes.length; k++)
+        sum += closes[k];
+      const mean = sum / bbPeriod;
+
+      let sqSum = 0;
+      for (let k = closes.length - bbPeriod; k < closes.length; k++) {
+        const diff = closes[k] - mean;
+        sqSum += diff * diff;
+      }
+      const sigma = Math.sqrt(sqSum / bbPeriod);
+
+      upperBB.set(i, mean + bbStdDev * sigma);
+      lowerBB.set(i, mean - bbStdDev * sigma);
+    }
   }
 
   return { sma, upperBB, lowerBB };
@@ -317,10 +346,28 @@ const RatioChart = ({
 
   const [mode, setMode] = useState<ChartMode>("line");
 
+  const rc = useSettingsStore((s) => s.settings.ratioChart);
+
+  const bucketSeconds = useMemo(
+    () => timeframeToSeconds(rc.timeframe),
+    [rc.timeframe],
+  );
+  const bucketsPerSession = useMemo(
+    () => Math.ceil(SESSION_DURATION_SEC / bucketSeconds),
+    [bucketSeconds],
+  );
+
+  // Refs para que los closures del chart (timeFormatter, tickMarkFormatter,
+  // ingestión live) lean el bucketSeconds vigente sin re-crear el chart.
+  const bucketSecondsRef = useRef(bucketSeconds);
+  useEffect(() => {
+    bucketSecondsRef.current = bucketSeconds;
+  }, [bucketSeconds]);
+
   const promColors: PromColors = {
-    promant: "#02CF28",
-    prommonth: "#F20202",
-    SMA: "#f97316",
+    promant: rc.promant.color,
+    prommonth: rc.prommonth.color,
+    SMA: rc.sma.color,
   };
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -399,11 +446,12 @@ const RatioChart = ({
     upperBandLineRef.current?.setData(upperData);
     lowerBandLineRef.current?.setData(lowerData);
 
-    // SMA 200 + Bollinger Bands (sólo velas regulares, ver computeSMAandBB).
+    // SMA + Bollinger Bands (sólo velas regulares, ver computeSMAandBB).
     const { sma, upperBB, lowerBB } = computeSMAandBB(
       slots,
-      SMA_PERIOD,
-      BB_STD_DEV,
+      rc.sma.period,
+      rc.bollinger.period,
+      rc.bollinger.stdDev,
     );
     const toLineData = (
       values: Map<number, number>,
@@ -446,7 +494,8 @@ const RatioChart = ({
       localization: {
         // Crosshair / tooltip muestra fecha + hora ART real (no la lógica)
         timeFormatter: (chartTime: UTCTimestamp) => {
-          const idx = (Number(chartTime) - CHART_TIME_ANCHOR) / BUCKET_SECONDS;
+          const idx =
+            (Number(chartTime) - CHART_TIME_ANCHOR) / bucketSecondsRef.current;
           const slot = slotsRef.current[idx];
           return slot ? formatArtDateTime(slot.realStart) : "";
         },
@@ -457,7 +506,8 @@ const RatioChart = ({
         secondsVisible: false,
         rightOffset: 2,
         tickMarkFormatter: (chartTime: UTCTimestamp) => {
-          const idx = (Number(chartTime) - CHART_TIME_ANCHOR) / BUCKET_SECONDS;
+          const idx =
+            (Number(chartTime) - CHART_TIME_ANCHOR) / bucketSecondsRef.current;
           const slot = slotsRef.current[idx];
           if (!slot) return "";
           // Si es el primer bucket de su rueda (10:30 ART = 13:30 UTC)
@@ -486,22 +536,24 @@ const RatioChart = ({
 
     // Bandas diarias (fórmula del Excel: avgClose(D-1) ± avg de deltas
     // high/low contra avgClose anterior — ver handler /api/pairs/:id/daily/bands).
+    // Los color/width/style/visible se aplican vía useEffect[rc.dailyBands].
     upperBandLineRef.current = chart.addSeries(LineSeries, {
-      color: BAND_LINE_COLOR,
+      color: "#A855F7",
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: true,
       priceLineVisible: false,
     });
     lowerBandLineRef.current = chart.addSeries(LineSeries, {
-      color: BAND_LINE_COLOR,
+      color: "#A855F7",
       lineWidth: 1,
       priceFormat: { type: "price", precision: 5, minMove: 0.00001 },
       lastValueVisible: true,
       priceLineVisible: false,
     });
 
-    // SMA200 + Bollinger Bands (±BB_STD_DEV·σ) sobre los closes regulares.
+    // SMA + Bollinger Bands. Sus opciones (color/width/style/visible) se
+    // re-aplican vía useEffect[rc.sma] y useEffect[rc.bollinger].
     smaSeriesRef.current = chart.addSeries(LineSeries, {
       color: "#f97316",
       lineWidth: 2,
@@ -553,6 +605,47 @@ const RatioChart = ({
   useEffect(() => {
     chartRef.current?.applyOptions({ height });
   }, [height]);
+
+  // Cambios "en vivo" de color/width/style/enabled sobre series existentes.
+  // No re-fetchea ni re-calcula — solo applyOptions sobre cada serie.
+  useEffect(() => {
+    smaSeriesRef.current?.applyOptions({
+      color: rc.sma.color,
+      lineWidth: rc.sma.width as 1 | 2 | 3 | 4,
+      lineStyle: mapLineStyle(rc.sma.style),
+      visible: rc.sma.enabled,
+    });
+    bbUpperSeriesRef.current?.applyOptions({
+      color: rc.bollinger.color,
+      lineWidth: rc.bollinger.width as 1 | 2 | 3 | 4,
+      lineStyle: mapLineStyle(rc.bollinger.style),
+      visible: rc.bollinger.enabled,
+    });
+    bbLowerSeriesRef.current?.applyOptions({
+      color: rc.bollinger.color,
+      lineWidth: rc.bollinger.width as 1 | 2 | 3 | 4,
+      lineStyle: mapLineStyle(rc.bollinger.style),
+      visible: rc.bollinger.enabled,
+    });
+    upperBandLineRef.current?.applyOptions({
+      color: rc.dailyBands.upperColor,
+      lineWidth: rc.dailyBands.width as 1 | 2 | 3 | 4,
+      lineStyle: mapLineStyle(rc.dailyBands.style),
+      visible: rc.dailyBands.enabled,
+    });
+    lowerBandLineRef.current?.applyOptions({
+      color: rc.dailyBands.lowerColor,
+      lineWidth: rc.dailyBands.width as 1 | 2 | 3 | 4,
+      lineStyle: mapLineStyle(rc.dailyBands.style),
+      visible: rc.dailyBands.enabled,
+    });
+  }, [rc.sma, rc.bollinger, rc.dailyBands]);
+
+  // Cambios que requieren recalcular series (período de SMA/BB, desvío de BB).
+  useEffect(() => {
+    redraw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rc.sma.period, rc.bollinger.period, rc.bollinger.stdDev]);
 
   // Intercambiar serie principal según el modo (vela/línea)
   useEffect(() => {
@@ -628,36 +721,35 @@ const RatioChart = ({
     }
     avgPriceLinesRef.current = [];
 
-    if (dailyAvgs.prevDay !== null) {
+    if (dailyAvgs.prevDay !== null && rc.promant.enabled) {
       avgPriceLinesRef.current.push(
         series.createPriceLine({
           price: dailyAvgs.prevDay,
-          color: promColors.promant,
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
+          color: rc.promant.color,
+          lineWidth: rc.promant.width as 1 | 2 | 3 | 4,
+          lineStyle: mapLineStyle(rc.promant.style),
           axisLabelVisible: true,
-          //title: `Prom. ant. ${dailyAvgs.prevDay.toFixed(5)}`,
         }),
       );
     }
-    if (dailyAvgs.month !== null) {
+    if (dailyAvgs.month !== null && rc.prommonth.enabled) {
       avgPriceLinesRef.current.push(
         series.createPriceLine({
           price: dailyAvgs.month,
-          color: promColors.prommonth,
-          lineWidth: 1,
-          lineStyle: LineStyle.Dashed,
+          color: rc.prommonth.color,
+          lineWidth: rc.prommonth.width as 1 | 2 | 3 | 4,
+          lineStyle: mapLineStyle(rc.prommonth.style),
           axisLabelVisible: true,
-          //title: `Prom. ${MONTH_AVG_SESSIONS}r ${dailyAvgs.month.toFixed(5)}`,
         }),
       );
     }
-  }, [dailyAvgs, mode]);
+  }, [dailyAvgs, mode, rc.promant, rc.prommonth]);
 
-  // Cambiar de par: limpiar buffer y recargar histórico (21 ruedas + warmup).
+  // Cambiar de par o de timeframe: limpiar buffer y recargar histórico.
   useEffect(() => {
-    if (currentPairIdRef.current === selectedPairId) return;
-    currentPairIdRef.current = selectedPairId;
+    const fetchKey = `${selectedPairId ?? ""}::${rc.timeframe}`;
+    if (currentPairIdRef.current === fetchKey) return;
+    currentPairIdRef.current = fetchKey;
     slotsRef.current = [];
     byBucketRef.current = new Map();
     dailyBandsRef.current = new Map();
@@ -672,11 +764,11 @@ const RatioChart = ({
     const toMs = now + 24 * 3600 * 1000; // un día de buffer
     const fromIso = new Date(fromMs).toISOString();
     const toIso = new Date(toMs).toISOString();
-    const limit = SESSIONS_TO_SHOW * BUCKETS_PER_SESSION + 50;
+    const limit = SESSIONS_TO_SHOW * bucketsPerSession + 50;
 
     Promise.all([
       fetchPairCandles(pairIdAtFetchStart, {
-        timeframe: "5m",
+        timeframe: rc.timeframe,
         from: fromIso,
         to: toIso,
         limit,
@@ -746,7 +838,10 @@ const RatioChart = ({
           close: c.close,
         }));
 
-        const { slots, byBucket } = buildSlots(historical);
+        const { slots, byBucket } = buildSlots(historical, {
+          bucketSec: bucketSeconds,
+          bucketsPerSession,
+        });
         slotsRef.current = slots;
         byBucketRef.current = byBucket;
         redraw();
@@ -777,16 +872,16 @@ const RatioChart = ({
       .catch((err) => {
         console.error("Error cargando velas del par", err);
       });
-  }, [selectedPairId]);
+  }, [selectedPairId, rc.timeframe, bucketSeconds, bucketsPerSession]);
 
-  // Ingestar cada tick en el bucket de 5m correspondiente.
+  // Ingestar cada tick en el bucket correspondiente al timeframe actual.
   useEffect(() => {
     if (!live || !selectedPairId) return;
     if (live.pairId !== selectedPairId) return;
     if (!Number.isFinite(live.currentRatio)) return;
 
     const ts = Math.floor(new Date(live.timestamp).getTime() / 1000);
-    const bucket = floorToBucket(ts);
+    const bucket = floorToBucket(ts, bucketSecondsRef.current);
     const idx = byBucketRef.current.get(bucket);
     if (idx === undefined) return; // tick fuera de la rueda dibujada
 
@@ -810,8 +905,10 @@ const RatioChart = ({
             {pair ? pair.name : "Seleccioná un par"}
           </div>
           <div className="flex items-center text-xs uppercase tracking-wider text-muted py-1 pr-4">
-            Ratio · velas 5m · {SESSIONS_TO_SHOW}r · bandas {BANDS_WINDOW}d ·
-            SMA{SMA_PERIOD} · BB ±{BB_STD_DEV}σ
+            Ratio · velas {rc.timeframe} · {SESSIONS_TO_SHOW}r · bandas{" "}
+            {BANDS_WINDOW}d
+            {rc.sma.enabled && ` · SMA${rc.sma.period}`}
+            {rc.bollinger.enabled && ` · BB ±${rc.bollinger.stdDev}σ`}
           </div>
           <div className="flex items-center">
             {live && pair && (
@@ -852,24 +949,30 @@ const RatioChart = ({
         </div>
         {pair && (
           <div className="flex flex-col gap-1 w-25 pl-1">
-            <div
-              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
-              style={{ backgroundColor: `${promColors.promant}` }}
-            >
-              Prom. ant.
-            </div>
-            <div
-              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
-              style={{ backgroundColor: `${promColors.prommonth}` }}
-            >
-              Prom. {MONTH_AVG_SESSIONS}r
-            </div>
-            <div
-              className="text-xs w-full font-medium font-mono text-white p-1 rounded"
-              style={{ backgroundColor: `${promColors.SMA}` }}
-            >
-              SMA{SMA_PERIOD}
-            </div>
+            {rc.promant.enabled && (
+              <div
+                className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+                style={{ backgroundColor: promColors.promant }}
+              >
+                Prom. ant.
+              </div>
+            )}
+            {rc.prommonth.enabled && (
+              <div
+                className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+                style={{ backgroundColor: promColors.prommonth }}
+              >
+                Prom. {MONTH_AVG_SESSIONS}r
+              </div>
+            )}
+            {rc.sma.enabled && (
+              <div
+                className="text-xs w-full font-medium font-mono text-white p-1 rounded"
+                style={{ backgroundColor: promColors.SMA }}
+              >
+                SMA{rc.sma.period}
+              </div>
+            )}
           </div>
         )}
       </div>

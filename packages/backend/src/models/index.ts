@@ -11,6 +11,7 @@ import type {
   SessionPhase,
   Exercise,
   ArbitrageOperation,
+  RatioChartSettings,
 } from "@arbitraje/shared";
 
 const SESSION_PHASES: SessionPhase[] = [
@@ -350,3 +351,63 @@ export const ArbitrageOperationModel =
     arbitrageOperationSchema,
     "arbitrage_operations",
   );
+
+// ============================================================
+// AppSettings - configuración global de la UI (singleton)
+// ============================================================
+// Doc único con _id: "global". Acceso: findById("global"); escritura:
+// findOneAndUpdate({_id:"global"}, ..., {upsert:true, new:true}).
+
+interface AppSettingsDoc extends Document {
+  _id: string;
+  ratioChart: RatioChartSettings;
+}
+
+const LINE_STYLES = ["solid", "dashed", "dotted"] as const;
+const TIMEFRAMES = ["5m", "15m", "1h", "4h", "1d"] as const;
+
+const indicatorLineSchemaDef = {
+  enabled: { type: Boolean, required: true },
+  color: { type: String, required: true },
+  width: { type: Number, required: true, min: 1, max: 6 },
+  style: { type: String, enum: LINE_STYLES, required: true },
+};
+
+const ratioChartSettingsSchema = new Schema(
+  {
+    timeframe: { type: String, enum: TIMEFRAMES, required: true },
+    sma: {
+      ...indicatorLineSchemaDef,
+      period: { type: Number, required: true, min: 2, max: 1000 },
+    },
+    promant: indicatorLineSchemaDef,
+    prommonth: indicatorLineSchemaDef,
+    bollinger: {
+      ...indicatorLineSchemaDef,
+      period: { type: Number, required: true, min: 2, max: 1000 },
+      stdDev: { type: Number, required: true, min: 0.5, max: 5 },
+    },
+    dailyBands: {
+      enabled: { type: Boolean, required: true },
+      upperColor: { type: String, required: true },
+      lowerColor: { type: String, required: true },
+      width: { type: Number, required: true, min: 1, max: 6 },
+      style: { type: String, enum: LINE_STYLES, required: true },
+    },
+  },
+  { _id: false },
+);
+
+const appSettingsSchema = new Schema<AppSettingsDoc>(
+  {
+    _id: { type: String, default: "global" },
+    ratioChart: { type: ratioChartSettingsSchema, required: true },
+  },
+  { timestamps: true, _id: false },
+);
+
+export const AppSettingsModel = mongoose.model<AppSettingsDoc>(
+  "AppSettings",
+  appSettingsSchema,
+  "app_settings",
+);

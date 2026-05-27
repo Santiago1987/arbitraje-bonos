@@ -6,6 +6,7 @@ import {
   PairSnapshotModel,
   PairDailyModel,
   AlertConfigModel,
+  AppSettingsModel,
 } from "../models/index.js";
 import { pairCalculatorService } from "../services/pair-calculator.service.js";
 import { statisticsService } from "../services/statistics.service.js";
@@ -25,7 +26,14 @@ import {
 import { arbitrageOperationsService } from "../services/arbitrage-operations.service.js";
 import { wsServer } from "../websocket/ws-server.js";
 import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
-import type { StatsWindow, PairDaily, PairDailyBands } from "@arbitraje/shared";
+import type {
+  StatsWindow,
+  PairDaily,
+  PairDailyBands,
+  AppSettings,
+  RatioChartSettings,
+} from "@arbitraje/shared";
+import { DEFAULT_APP_SETTINGS } from "@arbitraje/shared";
 
 // ============================================================
 // Schemas de validación con Zod
@@ -133,6 +141,37 @@ const updateOperationSchema = z.object({
   priceB: z.number().positive().optional(),
   timestamp: z.string().datetime().optional(),
   notes: z.string().optional(),
+});
+
+const indicatorLineConfigZ = z.object({
+  enabled: z.boolean(),
+  color: z.string().min(1),
+  width: z.number().int().min(1).max(6),
+  style: z.enum(["solid", "dashed", "dotted"]),
+});
+
+const ratioChartSettingsZ = z.object({
+  timeframe: z.enum(["5m", "15m", "1h", "4h", "1d"]),
+  sma: indicatorLineConfigZ.extend({
+    period: z.number().int().min(2).max(1000),
+  }),
+  promant: indicatorLineConfigZ,
+  prommonth: indicatorLineConfigZ,
+  bollinger: indicatorLineConfigZ.extend({
+    period: z.number().int().min(2).max(1000),
+    stdDev: z.number().min(0.5).max(5),
+  }),
+  dailyBands: z.object({
+    enabled: z.boolean(),
+    upperColor: z.string().min(1),
+    lowerColor: z.string().min(1),
+    width: z.number().int().min(1).max(6),
+    style: z.enum(["solid", "dashed", "dotted"]),
+  }),
+});
+
+const appSettingsPatchZ = z.object({
+  ratioChart: ratioChartSettingsZ.partial().optional(),
 });
 
 // ============================================================
@@ -826,4 +865,52 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       }
     },
   );
+
+  // ---- App Settings (configuración global, singleton _id="global") ----
+  app.get("/api/settings", async () => {
+    const doc = await AppSettingsModel.findById("global").lean();
+    if (!doc) {
+      return { success: true, data: DEFAULT_APP_SETTINGS };
+    }
+    // Merge superficial sobre defaults para que campos nuevos agregados al
+    // schema en el futuro aparezcan poblados aunque el doc viejo no los tenga.
+    const data: AppSettings = {
+      ratioChart: {
+        ...DEFAULT_APP_SETTINGS.ratioChart,
+        ...(doc.ratioChart ?? {}),
+      },
+    };
+    return { success: true, data };
+  });
+
+  app.patch("/api/settings", async (req, reply) => {
+    const parsed = appSettingsPatchZ.safeParse(req.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ success: false, error: parsed.error.format() });
+    }
+
+    const current = await AppSettingsModel.findById("global").lean();
+    const baseRatio: RatioChartSettings =
+      current?.ratioChart ?? DEFAULT_APP_SETTINGS.ratioChart;
+
+    const merged: AppSettings = {
+      ratioChart: {
+        ...baseRatio,
+        ...(parsed.data.ratioChart ?? {}),
+      } as RatioChartSettings,
+    };
+
+    const updated = await AppSettingsModel.findOneAndUpdate(
+      { _id: "global" },
+      { $set: { ratioChart: merged.ratioChart } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).lean();
+
+    return {
+      success: true,
+      data: { ratioChart: updated?.ratioChart ?? merged.ratioChart },
+    };
+  });
 }

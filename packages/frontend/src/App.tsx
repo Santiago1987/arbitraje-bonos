@@ -4,21 +4,14 @@ import { Layout } from "./components/layout/Layout";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import ChartsView from "./components/charts/ChartsView";
 import MultiChartsView from "./components/multicharts/MultiChartsView";
+import SettingsPage from "./components/settings/SettingsPage";
 import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./store/marketStore";
+import { useSettingsStore } from "./store/settingsStore";
 import { fetchBonds, fetchPairs } from "./services/api";
 import { initWS, closeWS, subscribeToPairs } from "./services/wsClient";
 
 type LiveMap = Record<string, PairLiveData>;
-
-function SettingsPage() {
-  return (
-    <div className="text-muted text-center py-20">
-      <p className="text-lg">Configuración - Próximamente</p>
-      <p className="text-sm mt-2">ABM de pares y parámetros del sistema</p>
-    </div>
-  );
-}
 
 function useBootstrap() {
   // 1) Cargar pares + live data inicial (desde memoria del backend)
@@ -68,6 +61,11 @@ function useBootstrap() {
     return () => {
       closeWS();
     };
+  }, []);
+
+  // 3) Hidratar settings desde backend (localStorage ya hidrató sync via persist)
+  useEffect(() => {
+    void useSettingsStore.getState().loadFromBackend();
   }, []);
 }
 

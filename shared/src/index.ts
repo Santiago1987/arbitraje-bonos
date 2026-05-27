@@ -337,3 +337,86 @@ export interface ExerciseDetail {
   operations: ArbitrageOperation[];
   state: ExerciseState;
 }
+
+// ============================================================
+// App Settings - configuración global persistida en backend
+// ============================================================
+
+export type LineStyleType = "solid" | "dashed" | "dotted";
+
+export interface IndicatorLineConfig {
+  enabled: boolean;
+  color: string;
+  width: number;
+  style: LineStyleType;
+}
+
+export interface SMAConfig extends IndicatorLineConfig {
+  period: number;
+}
+
+export interface BollingerConfig extends IndicatorLineConfig {
+  period: number;
+  stdDev: number;
+}
+
+export interface DailyBandsConfig {
+  enabled: boolean;
+  upperColor: string;
+  lowerColor: string;
+  width: number;
+  style: LineStyleType;
+}
+
+export interface RatioChartSettings {
+  timeframe: TimeframeKey;
+  sma: SMAConfig;
+  promant: IndicatorLineConfig;
+  prommonth: IndicatorLineConfig;
+  bollinger: BollingerConfig;
+  dailyBands: DailyBandsConfig;
+}
+
+export interface AppSettings {
+  ratioChart: RatioChartSettings;
+}
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  ratioChart: {
+    timeframe: "5m",
+    sma: {
+      enabled: true,
+      color: "#f97316",
+      width: 2,
+      style: "solid",
+      period: 200,
+    },
+    promant: {
+      enabled: true,
+      color: "#02CF28",
+      width: 1,
+      style: "dashed",
+    },
+    prommonth: {
+      enabled: true,
+      color: "#F20202",
+      width: 1,
+      style: "dashed",
+    },
+    bollinger: {
+      enabled: true,
+      color: "#FF0000",
+      width: 1,
+      style: "solid",
+      period: 200,
+      stdDev: 2,
+    },
+    dailyBands: {
+      enabled: true,
+      upperColor: "#A855F7",
+      lowerColor: "#A855F7",
+      width: 1,
+      style: "solid",
+    },
+  },
+};
