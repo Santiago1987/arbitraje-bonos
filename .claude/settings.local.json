@@ -38,7 +38,19 @@
       "Bash(timeout 10 npx tsx test-routes-import.ts)",
       "Bash(stat -c '%y %n' node_modules/@arbitraje/shared/dist/index.js node_modules/@arbitraje/shared/src/index.ts ../../shared/dist/index.js ../../shared/src/index.ts 2>&1)",
       "Read(//e/Proyectos/arbitraje-bonos/packages/backend/**)",
-      "Bash(timeout 8 npx tsx test-debug.ts)"
+      "Bash(timeout 8 npx tsx test-debug.ts)",
+      "Read(//e//**)",
+      "Bash(curl -s -m 3 http://localhost:3001/api/health)",
+      "Bash(curl -s -m 3 http://localhost:3001/api/settings)",
+      "Bash(curl -s -m 3 http://localhost:3001/api/pairs)",
+      "Bash(python -c \"import datetime; print\\(\\(datetime.datetime.utcnow\\(\\)-datetime.timedelta\\(days=35\\)\\).isoformat\\(\\)+'Z'\\)\")",
+      "Bash(python -c \"import datetime; print\\(\\(datetime.datetime.utcnow\\(\\)+datetime.timedelta\\(days=1\\)\\).isoformat\\(\\)+'Z'\\)\")",
+      "Bash(curl -s -m 8 'http://localhost:3001/api/pairs/69deeabc2329f52121e8f055/candles?timeframe=5m&from=__TRACKED_VAR__&to=__TRACKED_VAR__&limit=2000')",
+      "Bash(python -c \"import sys,json; print\\(len\\(json.load\\(sys.stdin\\)['data']\\)\\)\")",
+      "Bash(curl -s -m 8 'http://localhost:3001/api/pairs/69deeabc2329f52121e8f055/candles?timeframe=15m&from=2026-05-26T00:00:00.000Z&to=2026-05-29T23:00:00.000Z&limit=20')",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s -m 8 'http://localhost:3001/api/pairs/69deeabc2329f52121e8f055/candles?timeframe=15m&from=2026-05-26T00:00:00.000Z&to=2026-05-29T23:00:00.000Z&limit=12')",
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('count',d.length\\);d.slice\\(0,12\\).forEach\\(c=>console.log\\(c.openTime,'close',c.close\\)\\);}\\)\")"
     ]
   }
 }

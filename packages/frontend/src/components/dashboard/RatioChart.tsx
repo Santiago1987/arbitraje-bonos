@@ -759,6 +759,7 @@ const RatioChart = ({
     if (!selectedPairId) return;
 
     const pairIdAtFetchStart = selectedPairId;
+    const fetchKeyAtStart = fetchKey;
     const now = Date.now();
     const fromMs = now - HISTORY_LOOKBACK_DAYS * 24 * 3600 * 1000;
     const toMs = now + 24 * 3600 * 1000; // un día de buffer
@@ -783,7 +784,7 @@ const RatioChart = ({
       }),
     ])
       .then(([apiCandles, bandsResp]) => {
-        if (currentPairIdRef.current !== pairIdAtFetchStart) return;
+        if (currentPairIdRef.current !== fetchKeyAtStart) return;
 
         // Bandas: indexar por fecha local ART.
         const bandsMap = new Map<string, { upper: number; lower: number }>();

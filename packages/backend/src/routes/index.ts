@@ -905,7 +905,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const updated = await AppSettingsModel.findOneAndUpdate(
       { _id: "global" },
       { $set: { ratioChart: merged.ratioChart } },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
     ).lean();
 
     return {
