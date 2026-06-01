@@ -379,9 +379,13 @@ export interface RatioChartSettings {
 
 export interface AppSettings {
   ratioChart: RatioChartSettings;
+  // Orden personalizado de los pares en la tabla (array de pairIds).
+  // Los pares no presentes se muestran al final, en su orden natural.
+  pairOrder: string[];
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  pairOrder: [],
   ratioChart: {
     timeframe: "5m",
     sma: {

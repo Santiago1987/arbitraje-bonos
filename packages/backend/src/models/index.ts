@@ -358,9 +358,10 @@ export const ArbitrageOperationModel =
 // Doc único con _id: "global". Acceso: findById("global"); escritura:
 // findOneAndUpdate({_id:"global"}, ..., {upsert:true, new:true}).
 
-interface AppSettingsDoc extends Document {
+interface AppSettingsDoc extends Omit<Document, "_id"> {
   _id: string;
   ratioChart: RatioChartSettings;
+  pairOrder: string[];
 }
 
 const LINE_STYLES = ["solid", "dashed", "dotted"] as const;
@@ -402,6 +403,7 @@ const appSettingsSchema = new Schema<AppSettingsDoc>(
   {
     _id: { type: String, default: "global" },
     ratioChart: { type: ratioChartSettingsSchema, required: true },
+    pairOrder: { type: [String], default: [] },
   },
   { timestamps: true, _id: false },
 );

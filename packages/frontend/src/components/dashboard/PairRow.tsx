@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { GripVertical } from "lucide-react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { BondPair } from "@arbitraje/shared";
 import {
   useMarketStore,
@@ -17,6 +20,21 @@ const PairRow = ({ pair }: PairRowProps) => {
   const summary = useMarketStore(selectSummaryByPair(pair.id));
   const isSelected = useMarketStore((s) => s.selectedPairId === pair.id);
   const setSelectedPairId = useMarketStore((s) => s.setSelectedPairId);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: pair.id });
+
+  const sortableStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const currentRatio = live?.currentRatio;
   const prevRatioRef = useRef<number | undefined>(undefined);
@@ -43,7 +61,14 @@ const PairRow = ({ pair }: PairRowProps) => {
   }, [currentRatio]);
 
   return (
-    <div className="grid grid-cols-6 gap-1">
+    <div
+      ref={setNodeRef}
+      style={sortableStyle}
+      className={clsx(
+        "grid grid-cols-6 gap-1",
+        isDragging && "relative z-10 opacity-60",
+      )}
+    >
       <div
         onClick={() => setSelectedPairId(pair.id)}
         className={clsx(
@@ -53,7 +78,18 @@ const PairRow = ({ pair }: PairRowProps) => {
             : "bg-surface-1/40",
         )}
       >
-        <div className="flex items-center justify-center font-semibold text-center text-base font-mono">
+        <div className="flex items-center justify-center gap-1 font-semibold text-center text-base font-mono">
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Reordenar par"
+            className="flex items-center text-muted hover:text-white cursor-grab active:cursor-grabbing touch-none"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
           {pair.name}
         </div>
         <div

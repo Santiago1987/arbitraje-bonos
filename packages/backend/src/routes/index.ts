@@ -172,6 +172,7 @@ const ratioChartSettingsZ = z.object({
 
 const appSettingsPatchZ = z.object({
   ratioChart: ratioChartSettingsZ.partial().optional(),
+  pairOrder: z.array(z.string()).optional(),
 });
 
 // ============================================================
@@ -879,6 +880,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         ...DEFAULT_APP_SETTINGS.ratioChart,
         ...(doc.ratioChart ?? {}),
       },
+      pairOrder: doc.pairOrder ?? DEFAULT_APP_SETTINGS.pairOrder,
     };
     return { success: true, data };
   });
@@ -900,17 +902,29 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         ...baseRatio,
         ...(parsed.data.ratioChart ?? {}),
       } as RatioChartSettings,
+      pairOrder:
+        parsed.data.pairOrder ??
+        current?.pairOrder ??
+        DEFAULT_APP_SETTINGS.pairOrder,
     };
+
+    const $set: Record<string, unknown> = { ratioChart: merged.ratioChart };
+    if (parsed.data.pairOrder !== undefined) {
+      $set.pairOrder = merged.pairOrder;
+    }
 
     const updated = await AppSettingsModel.findOneAndUpdate(
       { _id: "global" },
-      { $set: { ratioChart: merged.ratioChart } },
+      { $set },
       { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
     ).lean();
 
     return {
       success: true,
-      data: { ratioChart: updated?.ratioChart ?? merged.ratioChart },
+      data: {
+        ratioChart: updated?.ratioChart ?? merged.ratioChart,
+        pairOrder: updated?.pairOrder ?? merged.pairOrder,
+      },
     };
   });
 }

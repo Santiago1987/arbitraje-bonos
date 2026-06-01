@@ -20,6 +20,7 @@ interface SettingsState {
 
   loadFromBackend: () => Promise<void>;
   updateRatioChart: (patch: Partial<RatioChartSettings>) => void;
+  setPairOrder: (order: string[]) => void;
   resetToDefaults: () => Promise<void>;
 }
 
@@ -34,6 +35,19 @@ const scheduleSync = (ratioChart: RatioChartSettings) => {
       const msg = err instanceof Error ? err.message : "Error desconocido";
       useSettingsStore.setState({ error: msg });
       console.error("[settings] sync failed:", err);
+    });
+  }, SYNC_DEBOUNCE_MS);
+};
+
+let pairOrderSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+const schedulePairOrderSync = (pairOrder: string[]) => {
+  if (pairOrderSyncTimer) clearTimeout(pairOrderSyncTimer);
+  pairOrderSyncTimer = setTimeout(() => {
+    updateAppSettings({ pairOrder }).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      useSettingsStore.setState({ error: msg });
+      console.error("[settings] pairOrder sync failed:", err);
     });
   }, SYNC_DEBOUNCE_MS);
 };
@@ -69,6 +83,13 @@ export const useSettingsStore = create<SettingsState>()(
           s.settings.ratioChart = { ...s.settings.ratioChart, ...patch };
         });
         scheduleSync(get().settings.ratioChart);
+      },
+
+      setPairOrder: (order) => {
+        set((s) => {
+          s.settings.pairOrder = order;
+        });
+        schedulePairOrderSync(order);
       },
 
       resetToDefaults: async () => {

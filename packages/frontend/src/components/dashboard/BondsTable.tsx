@@ -1,12 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Activity } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import PairRow from "./PairRow";
 import type { BondPair } from "@arbitraje/shared";
-import {
-  useMarketStore,
-  selectLiveByPair,
-  selectSummaryByPair,
-} from "../../store/marketStore";
+import { useMarketStore } from "../../store/marketStore";
+import { useSettingsStore } from "../../store/settingsStore";
 import { fetchPairsSummary } from "../../services/api";
 
 interface Props {
@@ -16,6 +27,8 @@ interface Props {
 
 const BondsTable = ({ loading, pairs }: Props) => {
   const setSummaries = useMarketStore((s) => s.setSummaries);
+  const pairOrder = useSettingsStore((s) => s.settings.pairOrder);
+  const setPairOrder = useSettingsStore((s) => s.setPairOrder);
 
   useEffect(() => {
     if (pairs.length === 0) return;
@@ -23,6 +36,32 @@ const BondsTable = ({ loading, pairs }: Props) => {
       .then(setSummaries)
       .catch(() => {});
   }, [pairs.length, setSummaries]);
+
+  // Orden custom: los pares presentes en pairOrder van primero según ese índice;
+  // los no presentes (recién creados) quedan al final en su orden natural.
+  const orderedPairs = useMemo(() => {
+    if (!pairOrder || pairOrder.length === 0) return pairs;
+    const indexOf = new Map(pairOrder.map((id, i) => [id, i]));
+    return [...pairs].sort((a, b) => {
+      const ia = indexOf.get(a.id) ?? Infinity;
+      const ib = indexOf.get(b.id) ?? Infinity;
+      return ia - ib;
+    });
+  }, [pairs, pairOrder]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = orderedPairs.map((p) => p.id);
+    const oldIndex = ids.indexOf(active.id as string);
+    const newIndex = ids.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+    setPairOrder(arrayMove(ids, oldIndex, newIndex));
+  };
 
   return (
     <div className="overflow-hidden">
@@ -102,7 +141,21 @@ const BondsTable = ({ loading, pairs }: Props) => {
               No hay pares configurados
             </div>
           ) : (
-            pairs.map((pair) => <PairRow key={pair.id} pair={pair} />)
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToVerticalAxis]}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={orderedPairs.map((p) => p.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {orderedPairs.map((pair) => (
+                  <PairRow key={pair.id} pair={pair} />
+                ))}
+              </SortableContext>
+            </DndContext>
           )}
         </div>
       </div>

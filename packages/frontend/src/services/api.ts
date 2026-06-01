@@ -418,6 +418,7 @@ export async function fetchAppSettings(): Promise<AppSettings> {
 
 export async function updateAppSettings(patch: {
   ratioChart?: Partial<RatioChartSettings>;
+  pairOrder?: string[];
 }): Promise<AppSettings> {
   const res = await request<ApiResponse<AppSettings>>("/settings", {
     method: "PATCH",

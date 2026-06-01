@@ -46,9 +46,10 @@ interface UpdateOperationInput {
   notes?: string;
 }
 
-function operationDocToDTO(
-  doc: Record<string, unknown> & { _id: { toString(): string } },
-): ArbitrageOperation {
+function operationDocToDTO(raw: {
+  _id: { toString(): string };
+}): ArbitrageOperation {
+  const doc = raw as Record<string, unknown> & { _id: { toString(): string } };
   return {
     id: doc._id.toString(),
     exerciseId: doc.exerciseId as string,
@@ -64,9 +65,8 @@ function operationDocToDTO(
   };
 }
 
-function exerciseDocToDTO(
-  doc: Record<string, unknown> & { _id: { toString(): string } },
-): Exercise {
+function exerciseDocToDTO(raw: { _id: { toString(): string } }): Exercise {
+  const doc = raw as Record<string, unknown> & { _id: { toString(): string } };
   return {
     id: doc._id.toString(),
     pairId: doc.pairId as string,
