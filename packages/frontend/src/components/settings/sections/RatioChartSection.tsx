@@ -91,9 +91,7 @@ export function RatioChartSection() {
         title="Promedio rueda anterior"
         description="Línea horizontal con el promedio de cierre de la rueda anterior."
         config={rc.promant}
-        onChange={(patch) =>
-          update({ promant: { ...rc.promant, ...patch } })
-        }
+        onChange={(patch) => update({ promant: { ...rc.promant, ...patch } })}
       />
 
       {/* Prommonth */}
@@ -147,8 +145,8 @@ export function RatioChartSection() {
               Bandas diarias
             </h3>
             <p className="text-xs text-muted mt-0.5">
-              Proyección de excursión esperada sobre el avgClose del día anterior.
-              Fórmula custom del backend.
+              Proyección de excursión esperada sobre el avgClose del día
+              anterior. Fórmula custom del backend.
             </p>
           </div>
           <button
@@ -168,7 +166,7 @@ export function RatioChartSection() {
           >
             <span
               className={clsx(
-                "absolute top-0.5 w-5 h-5 rounded-full bg-white transition-transform",
+                "absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform",
                 rc.dailyBands.enabled ? "translate-x-5" : "translate-x-0.5",
               )}
             />
@@ -216,7 +214,8 @@ export function RatioChartSection() {
 
       {status === "error" && (
         <div className="text-xs text-accent-red border border-accent-red/30 bg-accent-red/10 rounded p-2">
-          Error al sincronizar con el backend. Los cambios se guardan localmente.
+          Error al sincronizar con el backend. Los cambios se guardan
+          localmente.
         </div>
       )}
     </div>
