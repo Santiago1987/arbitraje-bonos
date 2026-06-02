@@ -50,7 +50,20 @@
       "Bash(curl -s -m 8 'http://localhost:3001/api/pairs/69deeabc2329f52121e8f055/candles?timeframe=15m&from=2026-05-26T00:00:00.000Z&to=2026-05-29T23:00:00.000Z&limit=20')",
       "Bash(python3 -c ' *)",
       "Bash(curl -s -m 8 'http://localhost:3001/api/pairs/69deeabc2329f52121e8f055/candles?timeframe=15m&from=2026-05-26T00:00:00.000Z&to=2026-05-29T23:00:00.000Z&limit=12')",
-      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('count',d.length\\);d.slice\\(0,12\\).forEach\\(c=>console.log\\(c.openTime,'close',c.close\\)\\);}\\)\")"
+      "Bash(node -e \"let s='';process.stdin.on\\('data',d=>s+=d\\).on\\('end',\\(\\)=>{const d=JSON.parse\\(s\\).data;console.log\\('count',d.length\\);d.slice\\(0,12\\).forEach\\(c=>console.log\\(c.openTime,'close',c.close\\)\\);}\\)\")",
+      "PowerShell(pnpm --filter @arbitraje/shared build)",
+      "PowerShell(if \\($?\\) { \"SHARED BUILT\" })",
+      "PowerShell(pnpm --filter backend exec tsc --noEmit)",
+      "PowerShell(if \\($?\\) { \"BACKEND OK\" })",
+      "PowerShell(pnpm --filter frontend exec tsc --noEmit -p tsconfig.app.json)",
+      "PowerShell(if \\($?\\) { \"FRONTEND OK\" })",
+      "PowerShell(pnpm --filter frontend exec tsc -b --noEmit 2>&1)",
+      "PowerShell(pnpm --filter frontend exec tsc -b 2>&1)",
+      "PowerShell(pnpm --filter backend exec tsc --noEmit 2>&1)",
+      "Bash(grep -rn \"components/layout\\\\|features/\\\\|\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\\\\|from \\\\\"\\\\.\\\\./\\\\.\\\\./components\" --include=*.ts --include=*.tsx .)",
+      "Bash(git mv *)",
+      "PowerShell($src = \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\\\\components\\\\settings\"; $dst = \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\\\\features\\\\bonds\\\\components\\\\settings\"; try { Move-Item -Path $src -Destination $dst -ErrorAction Stop; \"MOVED\" } catch { \"FAIL: $\\($_.Exception.Message\\)\"; Get-Process | Where-Object { $_.Name -match 'node|tsserver|Code' } | Select-Object Id, Name | Format-Table })",
+      "Bash(git add *)"
     ]
   }
 }

@@ -7,25 +7,25 @@ import {
   PairDailyModel,
   AlertConfigModel,
   AppSettingsModel,
-} from "../models/index.js";
-import { pairCalculatorService } from "../services/pair-calculator.service.js";
-import { statisticsService } from "../services/statistics.service.js";
-import { pairSummaryService } from "../services/pair-summary.service.js";
-import { dailyRollupService } from "../services/daily-rollup.service.js";
-import { alertEngine } from "../services/alert-engine.service.js";
-import { marketDataService } from "../services/market-data.service.js";
-import { bymaConnector } from "../services/byma-connector.service.js";
+} from "./models.js";
+import { pairCalculatorService } from "./services/pair-calculator.service.js";
+import { statisticsService } from "./services/statistics.service.js";
+import { pairSummaryService } from "./services/pair-summary.service.js";
+import { dailyRollupService } from "./services/daily-rollup.service.js";
+import { alertEngine } from "./services/alert-engine.service.js";
+import { marketDataService } from "./services/market-data.service.js";
+import { bymaConnector } from "./services/byma-connector.service.js";
 import {
   candleQueryService,
   SUPPORTED_TIMEFRAMES,
-} from "../services/candle-query.service.js";
+} from "./services/candle-query.service.js";
 import {
   getBondDailyCandles,
   getRatioDailyCandles,
-} from "../services/bond-candles.service.js";
-import { arbitrageOperationsService } from "../services/arbitrage-operations.service.js";
-import { wsServer } from "../websocket/ws-server.js";
-import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
+} from "./services/bond-candles.service.js";
+import { arbitrageOperationsService } from "./services/arbitrage-operations.service.js";
+import { wsServer } from "./ws-server.js";
+import { getLocalDateKey, getSessionConfig } from "../../utils/session.js";
 import type {
   StatsWindow,
   PairDaily,
@@ -34,6 +34,7 @@ import type {
   RatioChartSettings,
 } from "@arbitraje/shared";
 import { DEFAULT_APP_SETTINGS } from "@arbitraje/shared";
+import { registerOptionsRoutes } from "../options/routes.js";
 
 // ============================================================
 // Schemas de validación con Zod
@@ -180,6 +181,9 @@ const appSettingsPatchZ = z.object({
 // ============================================================
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  // ---- Módulo Opciones (dominio independiente) ----
+  await registerOptionsRoutes(app);
+
   // ---- Health ----
   app.get("/api/health", async () => ({
     status: "ok",

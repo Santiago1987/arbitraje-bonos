@@ -1,8 +1,8 @@
 import WebSocket from "ws";
 import type { RawTickData } from "@arbitraje/shared";
-import { config } from "../config/index.js";
+import { config } from "../../../config/index.js";
 import { marketDataService } from "./market-data.service.js";
-import { logger } from "../utils/logger.js";
+import { logger } from "../../../utils/logger.js";
 
 /**
  * BymaConnector

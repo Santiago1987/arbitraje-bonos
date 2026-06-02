@@ -78,7 +78,7 @@ const PairRow = ({ pair }: PairRowProps) => {
             : "bg-surface-1/40",
         )}
       >
-        <div className="flex items-center justify-center gap-1 font-semibold text-center text-base font-mono">
+        <div className="flex items-center justify-between gap-1 font-semibold text-center text-base font-mono">
           <button
             type="button"
             ref={setActivatorNodeRef}
@@ -90,7 +90,7 @@ const PairRow = ({ pair }: PairRowProps) => {
           >
             <GripVertical className="w-4 h-4" />
           </button>
-          {pair.name}
+          <div className="pr-1">{pair.name}</div>
         </div>
         <div
           key={flash?.tick ?? "initial"}

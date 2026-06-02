@@ -10,7 +10,7 @@ import {
   ArbitrageOperationModel,
   BondPairModel,
   ExerciseModel,
-} from "../models/index.js";
+} from "../models.js";
 
 // Tolerancia para considerar que el saldo neto de nominales "volvió a 0".
 // Las cantidades suelen ser enteros millonarios; 1e-6 es suficiente para

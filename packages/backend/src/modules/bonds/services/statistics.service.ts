@@ -1,7 +1,7 @@
 import type { PairStatistics, StatsWindow } from '@arbitraje/shared';
-import { PairSnapshotModel, BondPairModel } from '../models/index.js';
+import { PairSnapshotModel, BondPairModel } from '../models.js';
 import { pairCalculatorService } from './pair-calculator.service.js';
-import { logger } from '../utils/logger.js';
+import { logger } from '../../../utils/logger.js';
 
 // Mapeo de ventana a milisegundos
 const WINDOW_MS: Record<StatsWindow, number> = {

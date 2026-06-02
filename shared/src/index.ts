@@ -2,6 +2,9 @@
 // Tipos compartidos entre backend y frontend
 // ============================================================
 
+// --- Dominio Opciones (simulador, pricing, griegas) ---
+export * from "./options.js";
+
 // --- Datos crudos del mercado (lo que viene de BYMA via FIX) ---
 
 export interface RawTickData {

@@ -1,5 +1,5 @@
-import { BondSnapshotModel } from "../models/index.js";
-import { getSessionConfig } from "../utils/session.js";
+import { BondSnapshotModel } from "../models.js";
+import { getSessionConfig } from "../../../utils/session.js";
 import type { SettlementType } from "@arbitraje/shared";
 
 export interface BondCandle {

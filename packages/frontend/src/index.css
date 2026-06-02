@@ -82,4 +82,9 @@
   .badge-blue {
     @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-blue/10 text-accent-blue;
   }
+
+  .input {
+    @apply bg-surface-2 border border-surface-3/40 rounded-md px-2 py-1.5 text-sm text-gray-100
+           focus:outline-none focus:border-accent-blue/60 transition-colors;
+  }
 }

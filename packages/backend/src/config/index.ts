@@ -29,6 +29,12 @@ const envSchema = z.object({
   // --- Daily rollup ---
   DAILY_ROLLUP_INTERVAL_MS: z.coerce.number().default(5 * 60_000),
 
+  // --- Opciones (IOL) ---
+  IOL_USER: z.string().optional(),
+  IOL_PASSWORD: z.string().optional(),
+  /** Tasa libre de riesgo por defecto para pricing/griegas (0.4 = 40%). */
+  OPTIONS_RISK_FREE_RATE: z.coerce.number().default(0.4),
+
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),

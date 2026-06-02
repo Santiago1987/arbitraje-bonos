@@ -1015,7 +1015,7 @@ const OperationsTable = ({
   onDelete,
 }: OperationsTableProps) => {
   return (
-    <div className="overflow-x-auto rounded-lg border border-surface-3/30">
+    <div className="overflow-x-auto overflow-y-auto h-70 rounded-lg border border-surface-3/30">
       <table className="w-full text-xs">
         <thead className="bg-surface-2/60 text-muted">
           <tr>

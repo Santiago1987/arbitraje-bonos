@@ -1,6 +1,6 @@
 import type { RawTickData } from "@arbitraje/shared";
 import { eventBus } from "./event-bus.js";
-import { logger } from "../utils/logger.js";
+import { logger } from "../../../utils/logger.js";
 
 // Store en memoria: último tick por ticker
 interface TickEntry {

@@ -7,9 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "seed": "tsx src/scripts/seed.ts",
-    "backfill:candles": "tsx src/scripts/backfill-candles.ts",
-    "backfill:iol": "tsx src/scripts/backfill-iol-historical.ts"
+    "seed": "tsx src/modules/bonds/scripts/seed.ts",
+    "backfill:candles": "tsx src/modules/bonds/scripts/backfill-candles.ts",
+    "backfill:iol": "tsx src/modules/bonds/scripts/backfill-iol-historical.ts"
   },
   "dependencies": {
     "@arbitraje/shared": "workspace:*",

@@ -95,45 +95,50 @@ arbitraje-bonos/
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 ├── docker-compose.yml        # MongoDB
-├── shared/                   # Tipos compartidos
-│   └── src/index.ts
+├── shared/                   # Tipos compartidos (@arbitraje/shared)
+│   └── src/
+│       ├── index.ts          # Dominio bonos + re-export de opciones
+│       └── options.ts        # Dominio opciones (legs, griegas, simulación)
 ├── packages/
 │   ├── backend/
 │   │   └── src/
-│   │       ├── index.ts              # Entry point, bootea todo
-│   │       ├── config/index.ts       # Variables de entorno (Zod)
-│   │       ├── models/index.ts       # Mongoose schemas
-│   │       ├── routes/index.ts       # REST API (Fastify)
-│   │       ├── services/
-│   │       │   ├── event-bus.ts              # EventEmitter tipado
-│   │       │   ├── market-data.service.ts    # Store en memoria
-│   │       │   ├── pair-calculator.service.ts # Calcula ratios
-│   │       │   ├── snapshot.service.ts       # Persistencia periódica
-│   │       │   ├── alert-engine.service.ts   # Motor de alertas
-│   │       │   ├── statistics.service.ts     # Estadísticas históricas
-│   │       │   └── byma-connector.service.ts # WS client a BYMA
-│   │       ├── websocket/
-│   │       │   └── ws-server.ts              # WS server al front
-│   │       ├── scripts/
-│   │       │   └── seed.ts                   # Seed de bonos y pares
-│   │       └── utils/
-│   │           └── logger.ts                 # Pino logger
+│   │       ├── index.ts              # Entry point, bootea todo (composition root)
+│   │       ├── config/index.ts       # ── KERNEL: variables de entorno (Zod)
+│   │       ├── utils/                 # ── KERNEL: logger (Pino), session
+│   │       └── modules/              # Un subdir por dominio (simétrico)
+│   │           ├── bonds/
+│   │           │   ├── routes.ts             # REST API de bonos (Fastify)
+│   │           │   ├── models.ts             # Mongoose schemas de bonos
+│   │           │   ├── ws-server.ts          # WS server al front
+│   │           │   ├── services/             # event-bus, market-data, pair-calculator,
+│   │           │   │                         #   snapshot, alert-engine, byma-connector, ...
+│   │           │   └── scripts/              # seed, backfill-*
+│   │           └── options/
+│   │               ├── routes.ts             # /api/options/* (simulate, price, iv, chain)
+│   │               ├── models.ts             # options_strategies
+│   │               ├── pricing.service.ts    # Black-Scholes, griegas, IV
+│   │               ├── payoff.service.ts     # Curva P&L, breakevens, max profit/loss
+│   │               └── iol-options.connector.ts # Adaptador IOL (OptionsDataProvider)
 │   └── frontend/
-│       ├── index.html
-│       ├── vite.config.ts
-│       ├── tailwind.config.js
 │       └── src/
 │           ├── main.tsx
-│           ├── App.tsx                       # Router
+│           ├── App.tsx                       # Router (rutas de ambas secciones)
 │           ├── index.css                     # Tailwind + tema oscuro
-│           ├── components/
-│           │   ├── layout/Layout.tsx          # Sidebar + Outlet
-│           │   └── dashboard/Dashboard.tsx    # Tabla principal
-│           ├── hooks/
-│           │   └── useWebSocket.ts           # Hook WS con reconexión
-│           └── services/
-│               └── api.ts                    # HTTP client tipado
+│           ├── components/layout/Layout.tsx  # Shell: switch de sección Bonos/Opciones
+│           └── features/                    # Un subdir por dominio (simétrico)
+│               ├── bonds/
+│               │   ├── components/{dashboard,charts,multicharts,settings}/
+│               │   ├── services/{api,wsClient,sound}.ts
+│               │   └── store/{marketStore,settingsStore}.ts
+│               └── options/
+│                   ├── SimulatorView.tsx     # Simulador de operatorias
+│                   └── optionsApi.ts
 ```
+
+> **Arquitectura modular**: cada dominio (bonos, opciones) vive aislado bajo
+> `modules/` (backend) y `features/` (frontend). El "kernel" compartido es
+> `config/` + `utils/` (back) y `components/layout` + `App.tsx` (front). Para
+> agregar un dominio nuevo se replica el patrón sin tocar los existentes.
 
 ## Comandos
 

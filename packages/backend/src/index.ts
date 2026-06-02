@@ -5,14 +5,14 @@ import mongoose from "mongoose";
 
 import { config } from "./config/index.js";
 import { logger } from "./utils/logger.js";
-import { registerRoutes } from "./routes/index.js";
-import { wsServer } from "./websocket/ws-server.js";
-import { pairCalculatorService } from "./services/pair-calculator.service.js";
-import { snapshotService } from "./services/snapshot.service.js";
-import { dailyRollupService } from "./services/daily-rollup.service.js";
-import { alertEngine } from "./services/alert-engine.service.js";
-import { bymaConnector } from "./services/byma-connector.service.js";
-import { candleBuilderService } from "./services/candle-builder.service.js";
+import { registerRoutes } from "./modules/bonds/routes.js";
+import { wsServer } from "./modules/bonds/ws-server.js";
+import { pairCalculatorService } from "./modules/bonds/services/pair-calculator.service.js";
+import { snapshotService } from "./modules/bonds/services/snapshot.service.js";
+import { dailyRollupService } from "./modules/bonds/services/daily-rollup.service.js";
+import { alertEngine } from "./modules/bonds/services/alert-engine.service.js";
+import { bymaConnector } from "./modules/bonds/services/byma-connector.service.js";
+import { candleBuilderService } from "./modules/bonds/services/candle-builder.service.js";
 
 async function bootstrap() {
   // ── 1. Conectar a MongoDB ──

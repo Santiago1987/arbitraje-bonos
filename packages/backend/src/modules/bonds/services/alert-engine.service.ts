@@ -4,10 +4,10 @@ import type {
   AlertField,
   PairLiveData,
 } from '@arbitraje/shared';
-import { AlertConfigModel } from '../models/index.js';
+import { AlertConfigModel } from '../models.js';
 import { eventBus } from './event-bus.js';
-import { config } from '../config/index.js';
-import { logger } from '../utils/logger.js';
+import { config } from '../../../config/index.js';
+import { logger } from '../../../utils/logger.js';
 
 function extractFieldValue(
   field: AlertField,

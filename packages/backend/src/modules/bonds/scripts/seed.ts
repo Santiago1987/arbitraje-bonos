@@ -9,7 +9,7 @@
 
 import "dotenv/config";
 import mongoose from "mongoose";
-import { BondModel, BondPairModel } from "../models/index.js";
+import { BondModel, BondPairModel } from "../models.js";
 
 const MONGO_URI =
   process.env.MONGO_URI ?? "mongodb://localhost:27017/arbitraje-bonos";

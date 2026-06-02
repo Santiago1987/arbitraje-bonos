@@ -1,8 +1,8 @@
 import type { BondPair, PairLiveData } from "@arbitraje/shared";
 import { eventBus } from "./event-bus.js";
 import { marketDataService } from "./market-data.service.js";
-import { BondPairModel } from "../models/index.js";
-import { logger } from "../utils/logger.js";
+import { BondPairModel } from "../models.js";
+import { logger } from "../../../utils/logger.js";
 
 /**
  * PairCalculatorService

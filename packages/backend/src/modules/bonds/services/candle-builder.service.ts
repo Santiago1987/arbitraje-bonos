@@ -1,7 +1,7 @@
 import type { PairLiveData } from "@arbitraje/shared";
 import { eventBus } from "./event-bus.js";
-import { OHLCVModel } from "../models/index.js";
-import { logger } from "../utils/logger.js";
+import { OHLCVModel } from "../models.js";
+import { logger } from "../../../utils/logger.js";
 
 const CANDLE_INTERVAL_MS = 5 * 60_000;
 const FLUSH_CHECK_MS = 30_000;

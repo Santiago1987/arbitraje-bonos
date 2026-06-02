@@ -6,8 +6,8 @@ import type {
   AlertEvent,
   PairLiveData,
 } from "@arbitraje/shared";
-import { eventBus } from "../services/event-bus.js";
-import { logger } from "../utils/logger.js";
+import { eventBus } from "./services/event-bus.js";
+import { logger } from "../../utils/logger.js";
 
 interface ClientState {
   ws: WebSocket;

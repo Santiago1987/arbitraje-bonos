@@ -1,6 +1,6 @@
 import type { PairSummary } from "@arbitraje/shared";
-import { BondPairModel, PairDailyModel } from "../models/index.js";
-import { getLocalDateKey, getSessionConfig } from "../utils/session.js";
+import { BondPairModel, PairDailyModel } from "../models.js";
+import { getLocalDateKey, getSessionConfig } from "../../../utils/session.js";
 
 /**
  * PairSummaryService

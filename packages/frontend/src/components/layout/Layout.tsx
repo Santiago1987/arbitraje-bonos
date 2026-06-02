@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { clsx } from "clsx";
 import {
   LayoutDashboard,
@@ -7,36 +7,89 @@ import {
   Bell,
   Settings,
   Activity,
+  Sigma,
+  type LucideIcon,
 } from "lucide-react";
 
-const NAV_ITEMS = [
-  { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/charts", icon: LineChart, label: "Gráficos" },
-  { to: "/multicharts", icon: LayoutGrid, label: "MultiCharts" },
-  { to: "/alerts", icon: Bell, label: "Alertas" },
-  { to: "/settings", icon: Settings, label: "Configuración" },
-];
+interface NavItem {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  end?: boolean;
+}
+
+// Cada sección es un dominio independiente con su propio menú.
+const SECTIONS = {
+  bonos: {
+    label: "Bonos",
+    icon: Activity,
+    /** Prefijo que identifica las rutas de la sección. "/" => raíz (bonos). */
+    match: (path: string) => !path.startsWith("/opciones"),
+    items: [
+      { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
+      { to: "/charts", icon: LineChart, label: "Gráficos" },
+      { to: "/multicharts", icon: LayoutGrid, label: "MultiCharts" },
+      { to: "/alerts", icon: Bell, label: "Alertas" },
+      { to: "/settings", icon: Settings, label: "Configuración" },
+    ] as NavItem[],
+  },
+  opciones: {
+    label: "Opciones",
+    icon: Sigma,
+    match: (path: string) => path.startsWith("/opciones"),
+    items: [
+      { to: "/opciones", icon: LayoutDashboard, label: "Simulador", end: true },
+    ] as NavItem[],
+  },
+} as const;
+
+type SectionKey = keyof typeof SECTIONS;
+const SECTION_ROOT: Record<SectionKey, string> = {
+  bonos: "/",
+  opciones: "/opciones",
+};
 
 export function Layout() {
+  const { pathname } = useLocation();
+  const activeSection: SectionKey = SECTIONS.opciones.match(pathname)
+    ? "opciones"
+    : "bonos";
+  const nav = SECTIONS[activeSection].items;
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Sidebar */}
-      <aside className="w-full h-16 bg-surface-1 border-r border-surface-3/30 flex shrink-0">
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 border-b border-surface-3/30">
-          <Activity className="w-6 h-6 text-accent-cyan shrink-0" />
-          <span className="font-bold text-lg hidden lg:block tracking-tight">
-            ArbBonos
-          </span>
+      {/* Topbar */}
+      <aside className="w-full h-16 bg-surface-1 border-b border-surface-3/30 flex shrink-0 items-center">
+        {/* Switch de sección */}
+        <div className="flex items-center gap-1 px-3 border-r border-surface-3/30 h-full">
+          {(Object.keys(SECTIONS) as SectionKey[]).map((key) => {
+            const s = SECTIONS[key];
+            const isActive = key === activeSection;
+            return (
+              <NavLink
+                key={key}
+                to={SECTION_ROOT[key]}
+                className={clsx(
+                  "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors",
+                  isActive
+                    ? "bg-accent-cyan/10 text-accent-cyan"
+                    : "text-muted hover:text-white hover:bg-surface-2",
+                )}
+              >
+                <s.icon className="w-5 h-5 shrink-0" />
+                <span className="hidden lg:block">{s.label}</span>
+              </NavLink>
+            );
+          })}
         </div>
 
-        {/* Navigation */}
-        <nav className="flex w-full py-4 px-2 space-y-1">
-          {NAV_ITEMS.map((item) => (
+        {/* Navegación de la sección activa */}
+        <nav className="flex gap-1 py-4 px-2">
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === "/"}
+              end={item.end}
               className={({ isActive }: { isActive: boolean }) =>
                 clsx(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm",
@@ -52,11 +105,8 @@ export function Layout() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 h-16 border-t border-surface-3/30">
-          <div className="text-xs text-muted hidden lg:block">
-            Arbitraje Bonos v1.0
-          </div>
+        <div className="ml-auto px-4 text-xs text-muted hidden lg:block">
+          Arbitraje v1.0
         </div>
       </aside>
 

@@ -1,5 +1,5 @@
 import type { OHLCV, TimeframeKey } from "@arbitraje/shared";
-import { OHLCVModel } from "../models/index.js";
+import { OHLCVModel } from "../models.js";
 
 const TIMEFRAME_MS: Record<TimeframeKey, number> = {
   "1m": 60_000,

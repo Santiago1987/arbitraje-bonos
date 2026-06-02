@@ -17,8 +17,8 @@
 
 import "dotenv/config";
 import mongoose from "mongoose";
-import { BondModel, BondSnapshotModel } from "../models/index.js";
-import { getSessionConfig, getLocalDateKey } from "../utils/session.js";
+import { BondModel, BondSnapshotModel } from "../models.js";
+import { getSessionConfig, getLocalDateKey } from "../../../utils/session.js";
 
 // === EDITAR ANTES DE CORRER ====================================
 const TOKEN =

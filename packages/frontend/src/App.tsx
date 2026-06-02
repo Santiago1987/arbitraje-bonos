@@ -1,15 +1,16 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
-import { Dashboard } from "./components/dashboard/Dashboard";
-import ChartsView from "./components/charts/ChartsView";
-import MultiChartsView from "./components/multicharts/MultiChartsView";
-import SettingsPage from "./components/settings/SettingsPage";
+import { Dashboard } from "./features/bonds/components/dashboard/Dashboard";
+import ChartsView from "./features/bonds/components/charts/ChartsView";
+import MultiChartsView from "./features/bonds/components/multicharts/MultiChartsView";
+import SettingsPage from "./features/bonds/components/settings/SettingsPage";
+import SimulatorView from "./features/options/SimulatorView";
 import type { PairLiveData } from "@arbitraje/shared";
-import { useMarketStore } from "./store/marketStore";
-import { useSettingsStore } from "./store/settingsStore";
-import { fetchBonds, fetchPairs } from "./services/api";
-import { initWS, closeWS, subscribeToPairs } from "./services/wsClient";
+import { useMarketStore } from "./features/bonds/store/marketStore";
+import { useSettingsStore } from "./features/bonds/store/settingsStore";
+import { fetchBonds, fetchPairs } from "./features/bonds/services/api";
+import { initWS, closeWS, subscribeToPairs } from "./features/bonds/services/wsClient";
 
 type LiveMap = Record<string, PairLiveData>;
 
@@ -80,6 +81,8 @@ export default function App() {
           <Route path="charts" element={<ChartsView />} />
           <Route path="multicharts" element={<MultiChartsView />} />
           <Route path="settings" element={<SettingsPage />} />
+          {/* Sección Opciones */}
+          <Route path="opciones" element={<SimulatorView />} />
         </Route>
       </Routes>
     </BrowserRouter>
