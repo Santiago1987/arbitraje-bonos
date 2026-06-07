@@ -35,6 +35,7 @@ import type {
 } from "@arbitraje/shared";
 import { DEFAULT_APP_SETTINGS } from "@arbitraje/shared";
 import { registerOptionsRoutes } from "../options/routes.js";
+import { registerStocksRoutes } from "../stocks/routes.js";
 
 // ============================================================
 // Schemas de validación con Zod
@@ -183,6 +184,9 @@ const appSettingsPatchZ = z.object({
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // ---- Módulo Opciones (dominio independiente) ----
   await registerOptionsRoutes(app);
+
+  // ---- Módulo Acciones (dominio independiente) ----
+  await registerStocksRoutes(app);
 
   // ---- Health ----
   app.get("/api/health", async () => ({
@@ -707,6 +711,12 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // El PnL realizado se acumula por ciclos: cada vez que el saldo neto de
   // ambos bonos vuelve a 0, se cierra un ciclo y se suma su cash flow.
   // ============================================================
+
+  // pairIds que tienen un ejercicio abierto (para el indicador en la tabla).
+  app.get("/api/exercises/open", async () => {
+    const pairIds = await arbitrageOperationsService.listOpenExercisePairIds();
+    return { success: true, data: pairIds };
+  });
 
   app.get<{ Params: { id: string } }>(
     "/api/pairs/:id/exercises",

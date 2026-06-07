@@ -8,6 +8,7 @@ import {
   useMarketStore,
   selectLiveByPair,
   selectSummaryByPair,
+  selectHasOpenExercise,
 } from "../../store/marketStore";
 import RefCell from "./RefCell";
 
@@ -18,6 +19,7 @@ interface PairRowProps {
 const PairRow = ({ pair }: PairRowProps) => {
   const live = useMarketStore(selectLiveByPair(pair.id));
   const summary = useMarketStore(selectSummaryByPair(pair.id));
+  const hasOpenExercise = useMarketStore(selectHasOpenExercise(pair.id));
   const isSelected = useMarketStore((s) => s.selectedPairId === pair.id);
   const setSelectedPairId = useMarketStore((s) => s.setSelectedPairId);
 
@@ -90,7 +92,15 @@ const PairRow = ({ pair }: PairRowProps) => {
           >
             <GripVertical className="w-4 h-4" />
           </button>
-          <div className="pr-1">{pair.name}</div>
+          <div className="flex items-center gap-1.5 pr-1">
+            {pair.name}
+            {hasOpenExercise && (
+              <span
+                title="Ejercicio abierto"
+                className="w-2 h-2 rounded-full bg-accent-green shadow-[0_0_6px] shadow-accent-green/70"
+              />
+            )}
+          </div>
         </div>
         <div
           key={flash?.tick ?? "initial"}

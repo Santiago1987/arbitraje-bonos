@@ -35,6 +35,18 @@ const envSchema = z.object({
   /** Tasa libre de riesgo por defecto para pricing/griegas (0.4 = 40%). */
   OPTIONS_RISK_FREE_RATE: z.coerce.number().default(0.4),
 
+  // --- Acciones argentinas (IOL, snapshot diario al cierre) ---
+  /** Habilita el job que baja acciones de IOL una vez al día. */
+  STOCKS_FETCH_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  /** Hora local (timezone de sesión) a la que corre el job. Default 17:00. */
+  STOCKS_FETCH_TIME: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .default("17:00"),
+
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),

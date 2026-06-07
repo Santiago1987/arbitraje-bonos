@@ -315,6 +315,12 @@ export async function fetchHealth(): Promise<Record<string, unknown>> {
 
 // ---- Ejercicios y operaciones de arbitraje ----
 
+// pairIds que tienen un ejercicio abierto (para el puntito en la tabla).
+export async function fetchOpenExercisePairIds(): Promise<string[]> {
+  const res = await request<ApiResponse<string[]>>("/exercises/open");
+  return res.data;
+}
+
 export async function fetchExercisesForPair(
   pairId: string,
 ): Promise<Exercise[]> {

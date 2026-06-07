@@ -10,7 +10,11 @@ import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./features/bonds/store/marketStore";
 import { useSettingsStore } from "./features/bonds/store/settingsStore";
 import { fetchBonds, fetchPairs } from "./features/bonds/services/api";
-import { initWS, closeWS, subscribeToPairs } from "./features/bonds/services/wsClient";
+import {
+  initWS,
+  closeWS,
+  subscribeToPairs,
+} from "./features/bonds/services/wsClient";
 
 type LiveMap = Record<string, PairLiveData>;
 

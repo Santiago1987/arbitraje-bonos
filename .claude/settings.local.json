@@ -63,7 +63,9 @@
       "Bash(grep -rn \"components/layout\\\\|features/\\\\|\\\\.\\\\./\\\\.\\\\./\\\\.\\\\./\\\\|from \\\\\"\\\\.\\\\./\\\\.\\\\./components\" --include=*.ts --include=*.tsx .)",
       "Bash(git mv *)",
       "PowerShell($src = \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\\\\components\\\\settings\"; $dst = \"e:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\frontend\\\\src\\\\features\\\\bonds\\\\components\\\\settings\"; try { Move-Item -Path $src -Destination $dst -ErrorAction Stop; \"MOVED\" } catch { \"FAIL: $\\($_.Exception.Message\\)\"; Get-Process | Where-Object { $_.Name -match 'node|tsserver|Code' } | Select-Object Id, Name | Format-Table })",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(pnpm --filter @arbitraje/shared exec tsc --noEmit)",
+      "Bash(echo \"---exit:$?---\")"
     ]
   }
 }

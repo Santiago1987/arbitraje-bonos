@@ -171,6 +171,13 @@ class ArbitrageOperationsService {
     return docs.map(exerciseDocToDTO);
   }
 
+  // Devuelve los pairId que tienen (al menos) un ejercicio abierto. Se usa
+  // para marcar esos pares en la tabla principal.
+  async listOpenExercisePairIds(): Promise<string[]> {
+    const ids = await ExerciseModel.distinct("pairId", { status: "open" });
+    return ids.map((id) => String(id));
+  }
+
   async openExercise(
     pairId: string,
     name: string,

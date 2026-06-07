@@ -33,6 +33,9 @@ interface MarketState {
   // Par seleccionado (para vista de gráfico, etc.)
   selectedPairId: string | null;
 
+  // pairIds con un ejercicio de arbitraje abierto (indicador en la tabla)
+  openExercisePairIds: string[];
+
   // Alertas recientes (buffer circular)
   recentAlerts: AlertEvent[];
 
@@ -73,6 +76,9 @@ interface MarketState {
   setWsStatus: (status: WSStatus) => void;
 
   setSelectedPairId: (pairId: string | null) => void;
+
+  setOpenExercisePairIds: (pairIds: string[]) => void;
+  setPairExerciseOpen: (pairId: string, isOpen: boolean) => void;
 }
 
 const MAX_ALERTS = 20;
@@ -86,6 +92,7 @@ export const useMarketStore = create<MarketState>()(
     summary: {},
     selectedWindow: "1m",
     selectedPairId: null,
+    openExercisePairIds: [],
     recentAlerts: [],
     alertConfigs: [],
     wsStatus: "idle",
@@ -198,6 +205,23 @@ export const useMarketStore = create<MarketState>()(
       set((state) => {
         state.selectedPairId = pairId;
       }),
+
+    setOpenExercisePairIds: (pairIds) =>
+      set((state) => {
+        state.openExercisePairIds = pairIds;
+      }),
+
+    setPairExerciseOpen: (pairId, isOpen) =>
+      set((state) => {
+        const has = state.openExercisePairIds.includes(pairId);
+        if (isOpen && !has) {
+          state.openExercisePairIds.push(pairId);
+        } else if (!isOpen && has) {
+          state.openExercisePairIds = state.openExercisePairIds.filter(
+            (id) => id !== pairId,
+          );
+        }
+      }),
   })),
 );
 
@@ -214,3 +238,7 @@ export const selectSummaryByPair = (pairId: string) => (state: MarketState) =>
 
 export const selectIsConnected = (state: MarketState) =>
   state.wsStatus === "connected";
+
+export const selectHasOpenExercise =
+  (pairId: string) => (state: MarketState) =>
+    state.openExercisePairIds.includes(pairId);

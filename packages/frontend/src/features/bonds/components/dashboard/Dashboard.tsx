@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMarketStore } from "../../store/marketStore";
-import { fetchAlerts } from "../../services/api";
+import { fetchAlerts, fetchOpenExercisePairIds } from "../../services/api";
 import BYMAModal from "./BYMAModal";
 import Header from "./Header";
 import Alerts from "./Alerts";
@@ -16,6 +16,9 @@ export function Dashboard() {
   const loading = useMarketStore((s) => s.pairsLoading);
   const alerts = useMarketStore((s) => s.recentAlerts);
   const setAlertConfigs = useMarketStore((s) => s.setAlertConfigs);
+  const setOpenExercisePairIds = useMarketStore(
+    (s) => s.setOpenExercisePairIds,
+  );
   const selectedPairId = useMarketStore((s) => s.selectedPairId);
 
   const [showBymaModal, setShowBymaModal] = useState(false);
@@ -26,6 +29,12 @@ export function Dashboard() {
       .then(setAlertConfigs)
       .catch(() => {});
   }, [setAlertConfigs]);
+
+  useEffect(() => {
+    fetchOpenExercisePairIds()
+      .then(setOpenExercisePairIds)
+      .catch(() => {});
+  }, [setOpenExercisePairIds]);
 
   const handleOnClickBymaModal = (show: boolean) => {
     setShowBymaModal(show);

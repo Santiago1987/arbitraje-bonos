@@ -29,7 +29,6 @@ const SECTIONS = {
       { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/charts", icon: LineChart, label: "Gráficos" },
       { to: "/multicharts", icon: LayoutGrid, label: "MultiCharts" },
-      { to: "/alerts", icon: Bell, label: "Alertas" },
       { to: "/settings", icon: Settings, label: "Configuración" },
     ] as NavItem[],
   },
@@ -60,6 +59,7 @@ export function Layout() {
     <div className="min-h-screen flex flex-col">
       {/* Topbar */}
       <aside className="w-full h-16 bg-surface-1 border-b border-surface-3/30 flex shrink-0 items-center">
+        <h1 className="text-lg font-bold px-4">Vikingo Bursatil</h1>
         {/* Switch de sección */}
         <div className="flex items-center gap-1 px-3 border-r border-surface-3/30 h-full">
           {(Object.keys(SECTIONS) as SectionKey[]).map((key) => {

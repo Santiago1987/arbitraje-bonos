@@ -30,6 +30,24 @@ export interface TickDocument {
   data: RawTickData;
 }
 
+// --- Acciones argentinas (IOL Cotizaciones) ---
+// Snapshot diario de cada acción al cierre de la rueda. Subconjunto de los
+// campos que devuelve IOL en /api/v2/Cotizaciones/acciones/argentina/Todos.
+
+export interface ArgStock {
+  simbolo: string;
+  ultimoPrecio: number;
+  variacionPorcentual: number;
+  apertura: number;
+  maximo: number;
+  minimo: number;
+  volumen: number;
+  cantidadOperaciones: number;
+  fecha: Date; // Instante exacto. IOL lo manda en ART (UTC-3) sin offset.
+  descripcion: string;
+  plazo: string; // Ej: "T1", "CI"
+}
+
 // --- Bonos ---
 
 export type BondCurrency = "USD" | "ARS";

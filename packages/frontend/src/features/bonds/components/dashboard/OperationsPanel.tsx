@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X, Trash2, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import type {
@@ -99,6 +99,7 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
   const live = useMarketStore((s) =>
     pairId ? (s.liveData[pairId] ?? null) : null,
   );
+  const setPairExerciseOpen = useMarketStore((s) => s.setPairExerciseOpen);
 
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [detail, setDetail] = useState<ExerciseDetail | null>(null);
@@ -199,12 +200,16 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
       .then((rows) => {
         setExercises(rows);
         setViewingExerciseId(null); // resetear: al cambiar de par mostrar el abierto
+        setPairExerciseOpen(
+          pairId,
+          rows.some((e) => e.status === "open"),
+        );
       })
       .catch((e) =>
         setError(e instanceof Error ? e.message : "Error cargando ejercicios"),
       )
       .finally(() => setLoading(false));
-  }, [open, pairId]);
+  }, [open, pairId, setPairExerciseOpen]);
 
   // ---- Cargar detalle del ejercicio visible ----
   useEffect(() => {
@@ -282,6 +287,10 @@ const OperationsPanel = ({ open, pairId, onClose }: Props) => {
     if (!pairId) return;
     const list = await fetchExercisesForPair(pairId);
     setExercises(list);
+    setPairExerciseOpen(
+      pairId,
+      list.some((e) => e.status === "open"),
+    );
     if (visibleExerciseId) {
       const updated = await fetchExerciseDetail(visibleExerciseId);
       setDetail(updated);
@@ -1014,8 +1023,19 @@ const OperationsTable = ({
   tickerB,
   onDelete,
 }: OperationsTableProps) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Al montar o cambiar el set de operaciones, dejar el scroll en la última fila.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [operations]);
+
   return (
-    <div className="overflow-x-auto overflow-y-auto h-70 rounded-lg border border-surface-3/30">
+    <div
+      ref={scrollRef}
+      className="overflow-x-auto overflow-y-auto h-70 rounded-lg border border-surface-3/30"
+    >
       <table className="w-full text-xs">
         <thead className="bg-surface-2/60 text-muted">
           <tr>

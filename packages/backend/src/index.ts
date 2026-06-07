@@ -13,6 +13,7 @@ import { dailyRollupService } from "./modules/bonds/services/daily-rollup.servic
 import { alertEngine } from "./modules/bonds/services/alert-engine.service.js";
 import { bymaConnector } from "./modules/bonds/services/byma-connector.service.js";
 import { candleBuilderService } from "./modules/bonds/services/candle-builder.service.js";
+import { stocksSnapshotService } from "./modules/stocks/services/stocks-snapshot.service.js";
 
 async function bootstrap() {
   // ── 1. Conectar a MongoDB ──
@@ -46,6 +47,7 @@ async function bootstrap() {
   snapshotService.start();
   dailyRollupService.start();
   candleBuilderService.start();
+  stocksSnapshotService.start();
 
   // El conector BYMA ya NO se inicia automáticamente.
   // La conexión es manual via POST /api/byma/connect desde el frontend.
@@ -61,6 +63,7 @@ async function bootstrap() {
     snapshotService.stop();
     dailyRollupService.stop();
     await candleBuilderService.stop();
+    stocksSnapshotService.stop();
     await app.close();
     await mongoose.disconnect();
     logger.info("Servidor cerrado");
