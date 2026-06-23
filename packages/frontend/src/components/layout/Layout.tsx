@@ -106,7 +106,7 @@ export function Layout() {
         </nav>
 
         <div className="ml-auto px-4 text-xs text-muted hidden lg:block">
-          Arbitraje v1.0
+          build {__COMMIT_HASH__}
         </div>
       </aside>
 
