@@ -22,6 +22,9 @@ export interface AppEvents {
     bondCount?: number;
     timestamp: Date;
   };
+
+  // Estado de la conexión BYMA cambió
+  "byma:status": { connected: boolean };
 }
 
 // EventEmitter tipado

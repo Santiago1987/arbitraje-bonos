@@ -42,8 +42,10 @@ interface MarketState {
   // Alertas configuradas (persistidas en backend)
   alertConfigs: AlertConfig[];
 
-  // Conexión
+  // Conexión frontend↔backend
   wsStatus: WSStatus;
+  // Conexión backend↔BYMA (confirmada por "status:online")
+  bymaConnected: boolean;
 
   // Carga inicial
   pairsLoading: boolean;
@@ -74,6 +76,7 @@ interface MarketState {
   removeAlertConfig: (id: string) => void;
 
   setWsStatus: (status: WSStatus) => void;
+  setBymaConnected: (connected: boolean) => void;
 
   setSelectedPairId: (pairId: string | null) => void;
 
@@ -96,6 +99,7 @@ export const useMarketStore = create<MarketState>()(
     recentAlerts: [],
     alertConfigs: [],
     wsStatus: "idle",
+    bymaConnected: false,
     pairsLoading: false,
     pairsError: null,
 
@@ -201,6 +205,11 @@ export const useMarketStore = create<MarketState>()(
         state.wsStatus = status;
       }),
 
+    setBymaConnected: (connected) =>
+      set((state) => {
+        state.bymaConnected = connected;
+      }),
+
     setSelectedPairId: (pairId) =>
       set((state) => {
         state.selectedPairId = pairId;
@@ -236,8 +245,7 @@ export const selectStatsByPair = (pairId: string) => (state: MarketState) =>
 export const selectSummaryByPair = (pairId: string) => (state: MarketState) =>
   state.summary[pairId];
 
-export const selectIsConnected = (state: MarketState) =>
-  state.wsStatus === "connected";
+export const selectIsConnected = (state: MarketState) => state.bymaConnected;
 
 export const selectHasOpenExercise =
   (pairId: string) => (state: MarketState) =>

@@ -272,6 +272,7 @@ export type WSMessageType =
   | "tick_update"
   | "pair_update"
   | "alert_triggered"
+  | "byma_status"
   | "subscribe"
   | "unsubscribe"
   | "heartbeat";

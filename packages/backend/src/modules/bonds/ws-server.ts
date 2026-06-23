@@ -7,6 +7,7 @@ import type {
   PairLiveData,
 } from "@arbitraje/shared";
 import { eventBus } from "./services/event-bus.js";
+import { bymaConnector } from "./services/byma-connector.service.js";
 import { logger } from "../../utils/logger.js";
 
 interface ClientState {
@@ -72,6 +73,13 @@ class WSServer {
       this.send(socket, {
         type: "heartbeat",
         payload: { clientId },
+        timestamp: new Date(),
+      });
+
+      // Enviar estado actual de BYMA al nuevo cliente
+      this.send(socket, {
+        type: "byma_status",
+        payload: { connected: bymaConnector.getStatus().connected },
         timestamp: new Date(),
       });
     });
@@ -166,6 +174,18 @@ class WSServer {
         if (state.subscribedAlerts) {
           this.send(state.ws, msg);
         }
+      }
+    });
+
+    // Estado de conexión BYMA -> broadcast a todos los clientes
+    eventBus.on("byma:status", ({ connected }) => {
+      const msg: WSMessage<{ connected: boolean }> = {
+        type: "byma_status",
+        payload: { connected },
+        timestamp: new Date(),
+      };
+      for (const [, state] of this.clients) {
+        this.send(state.ws, msg);
       }
     });
   }

@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import type { RawTickData } from "@arbitraje/shared";
 import { config } from "../../../config/index.js";
 import { marketDataService } from "./market-data.service.js";
+import { eventBus } from "./event-bus.js";
 import { logger } from "../../../utils/logger.js";
 
 /**
@@ -22,6 +23,7 @@ class BymaConnector {
   private sessionId = "";
   private connId = "";
   private wsSecKey = "";
+  private bymaConfirmed = false;
 
   /**
    * Configura las credenciales necesarias para conectar con BYMA.
@@ -56,7 +58,14 @@ class BymaConnector {
       this.ws.close();
       this.ws = null;
     }
+    this.setBymaConfirmed(false);
     logger.info("BymaConnector desconectado");
+  }
+
+  private setBymaConfirmed(value: boolean): void {
+    if (this.bymaConfirmed === value) return;
+    this.bymaConfirmed = value;
+    eventBus.emit("byma:status", { connected: value });
   }
 
   private createConnection(): void {
@@ -104,6 +113,7 @@ class BymaConnector {
           "Conexión con BYMA cerrada",
         );
         this.stopHeartbeat();
+        this.setBymaConfirmed(false);
         if (!this.isIntentionallyClosed) {
           //this.reconnect();
         }
@@ -128,6 +138,7 @@ class BymaConnector {
     let data: RawTickData | null = null;
 
     if (text.includes('"status":"online"') && this.ws) {
+      this.setBymaConfirmed(true);
       logger.info(
         "Suscripción a BYMA confirmada, enviando solicitud de datos...",
       );
@@ -258,7 +269,7 @@ class BymaConnector {
    */
   getStatus() {
     return {
-      connected: this.ws?.readyState === WebSocket.OPEN,
+      connected: this.bymaConfirmed,
       retryCount: this.retryCount,
       url: config.BYMA_WS_URL,
     };

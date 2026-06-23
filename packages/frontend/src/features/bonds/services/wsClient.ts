@@ -45,6 +45,9 @@ function handleMessage(event: MessageEvent) {
       store.addAlert(msg.payload as AlertEvent);
       playAlertSound();
       break;
+    case "byma_status":
+      store.setBymaConnected((msg.payload as { connected: boolean }).connected);
+      break;
     case "heartbeat":
       send({ type: "heartbeat", payload: {}, timestamp: new Date() });
       break;
@@ -81,7 +84,9 @@ function connect() {
 
   ws.onclose = () => {
     ws = null;
-    useMarketStore.getState().setWsStatus("disconnected");
+    const s = useMarketStore.getState();
+    s.setWsStatus("disconnected");
+    s.setBymaConnected(false);
     if (manuallyClosed) return;
 
     const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
