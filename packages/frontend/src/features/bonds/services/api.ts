@@ -21,7 +21,7 @@ import type {
   RatioChartSettings,
 } from "@arbitraje/shared";
 
-const BASE = "http://localhost:3001/api";
+const BASE = "/api";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const hasBody = options?.body != null;
