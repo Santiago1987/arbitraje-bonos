@@ -255,7 +255,7 @@ const BONDS = [
   },
   {
     ticker: "AL30_CI",
-    fullTicker: "AL30C_CI",
+    fullTicker: "AL30_CI",
     name: "Bonar 2030 CI",
     currency: "ARS" as const,
     law: "AR" as const,
