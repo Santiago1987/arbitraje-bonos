@@ -68,7 +68,16 @@
       "Bash(echo \"---exit:$?---\")",
       "Bash(pnpm --version)",
       "PowerShell(node --version)",
-      "PowerShell(pnpm --version)"
+      "PowerShell(pnpm --version)",
+      "PowerShell(pnpm exec tsc --noEmit -p packages/backend)",
+      "PowerShell(try { \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 3\\).Content } catch { \"NO_SERVER: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(pnpm --filter backend exec tsx src/index.ts)",
+      "PowerShell($deadline=\\(Get-Date\\).AddSeconds\\(30\\); do { Start-Sleep -Milliseconds 800; try { $r=\\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 2\\).Content; break } catch { $r=$null } } while \\(\\(Get-Date\\) -lt $deadline\\); if \\($r\\) { $r } else { \"backend no respondió en 30s\" })",
+      "PowerShell($body = '{\"tickers\":[\"GGAL\",\"YPFD\",\"PAMP\"],\"tasaCaucion\":0.45}'; \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage/settings\" -Method PUT -Body $body -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 5\\).Content)",
+      "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 5\\).Content; \"\"; $bad = '{\"tickers\":[\"GGAL_CI\"]}'; try { \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage/settings\" -Method PUT -Body $bad -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"400 OK: ticker con _ rechazado\" }; \"\"; $ov = '{\"diasCaucionOverride\":3}'; \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage/settings\" -Method PUT -Body $ov -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 5\\).Content; \"\"; \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 5\\).Content)",
+      "PowerShell(pnpm --filter backend check:pase)",
+      "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-e2e-ws.ts)",
+      "PowerShell(Remove-Item \"f:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\backend\\\\src\\\\modules\\\\stocks\\\\scripts\\\\_tmp-e2e-ws.ts\" -Confirm:$false)"
     ]
   },
   "enabledPlugins": {

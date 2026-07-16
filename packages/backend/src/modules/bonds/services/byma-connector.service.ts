@@ -24,6 +24,24 @@ class BymaConnector {
   private connId = "";
   private wsSecKey = "";
   private bymaConfirmed = false;
+  private extraTopics: string[] = [];
+
+  /**
+   * Topics adicionales (ej. acciones CI/24hs) que se suman a la suscripción.
+   * Si ya estamos suscriptos, manda la suscripción incremental al instante.
+   */
+  setExtraTopics(topics: string[]): void {
+    this.extraTopics = topics;
+    if (
+      this.bymaConfirmed &&
+      this.ws?.readyState === WebSocket.OPEN &&
+      topics.length > 0
+    ) {
+      this.ws.send(
+        JSON.stringify({ _req: "S", topicType: "md", topics, replace: false }),
+      );
+    }
+  }
 
   /**
    * Configura las credenciales necesarias para conectar con BYMA.
@@ -145,7 +163,9 @@ class BymaConnector {
       const sub = {
         _req: "S",
         topicType: "md",
+        // ponytail: la lista de bonos sigue hardcodeada; migrarla a BD es otro ticket.
         topics: [
+          ...this.extraTopics,
           "md.bm_MERV_AL41_24hs",
           "md.bm_MERV_AL41D_24hs",
           "md.bm_MERV_AL41C_24hs",
@@ -184,6 +204,10 @@ class BymaConnector {
           "md.bm_MERV_AL30_CI",
           "md.bm_MERV_AL30D_CI",
           "md.bm_MERV_AL30C_CI",
+          "md.bm_MERV_PESOS_1D",
+          "md.bm_MERV_PESOS_2D",
+          "md.bm_MERV_PESOS_3D",
+          "md.bm_MERV_PESOS_4D",
         ],
         replace: false,
       };

@@ -5,6 +5,7 @@ import type {
   WSSubscribePayload,
   AlertEvent,
   PairLiveData,
+  StockArbUpdate,
 } from "@arbitraje/shared";
 import { eventBus } from "./services/event-bus.js";
 import { bymaConnector } from "./services/byma-connector.service.js";
@@ -14,6 +15,7 @@ interface ClientState {
   ws: WebSocket;
   subscribedPairs: Set<string>;
   subscribedAlerts: boolean;
+  subscribedStocks: boolean;
   lastActivity: number;
 }
 
@@ -43,6 +45,7 @@ class WSServer {
         ws: socket,
         subscribedPairs: new Set(),
         subscribedAlerts: false,
+        subscribedStocks: false,
         lastActivity: Date.now(),
       };
 
@@ -115,6 +118,9 @@ class WSServer {
         } else if (payload.channel === "alerts") {
           state.subscribedAlerts = true;
           logger.debug({ clientId }, "Suscrito a alertas");
+        } else if (payload.channel === "stocks") {
+          state.subscribedStocks = true;
+          logger.debug({ clientId }, "Suscrito a arbitraje de acciones");
         }
         break;
       }
@@ -127,6 +133,8 @@ class WSServer {
           }
         } else if (payload.channel === "alerts") {
           state.subscribedAlerts = false;
+        } else if (payload.channel === "stocks") {
+          state.subscribedStocks = false;
         }
         break;
       }
@@ -172,6 +180,21 @@ class WSServer {
 
       for (const [, state] of this.clients) {
         if (state.subscribedAlerts) {
+          this.send(state.ws, msg);
+        }
+      }
+    });
+
+    // Arbitraje CI/24hs de acciones -> a clientes suscritos al canal "stocks"
+    eventBus.on("stockarb:update", (update: StockArbUpdate) => {
+      const msg: WSMessage<StockArbUpdate> = {
+        type: "stock_arb_update",
+        payload: update,
+        timestamp: new Date(),
+      };
+
+      for (const [, state] of this.clients) {
+        if (state.subscribedStocks) {
           this.send(state.ws, msg);
         }
       }
