@@ -77,7 +77,8 @@
       "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 5\\).Content; \"\"; $bad = '{\"tickers\":[\"GGAL_CI\"]}'; try { \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage/settings\" -Method PUT -Body $bad -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 5\\).Content } catch { \"400 OK: ticker con _ rechazado\" }; \"\"; $ov = '{\"diasCaucionOverride\":3}'; \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage/settings\" -Method PUT -Body $ov -ContentType \"application/json\" -UseBasicParsing -TimeoutSec 5\\).Content; \"\"; \\(Invoke-WebRequest -Uri \"http://localhost:3001/api/stocks/arbitrage\" -UseBasicParsing -TimeoutSec 5\\).Content)",
       "PowerShell(pnpm --filter backend check:pase)",
       "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-e2e-ws.ts)",
-      "PowerShell(Remove-Item \"f:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\backend\\\\src\\\\modules\\\\stocks\\\\scripts\\\\_tmp-e2e-ws.ts\" -Confirm:$false)"
+      "PowerShell(Remove-Item \"f:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\backend\\\\src\\\\modules\\\\stocks\\\\scripts\\\\_tmp-e2e-ws.ts\" -Confirm:$false)",
+      "PowerShell(pnpm --filter frontend exec tsc --noEmit)"
     ]
   },
   "enabledPlugins": {
