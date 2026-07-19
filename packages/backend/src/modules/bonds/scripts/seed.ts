@@ -254,7 +254,7 @@ const BONDS = [
     maturityDate: new Date("2030-07-09"),
   },
   {
-    ticker: "AL30_CI",
+    ticker: "AL30C_CI",
     fullTicker: "AL30C_CI",
     name: "Bonar 2030 CI",
     currency: "ARS" as const,
