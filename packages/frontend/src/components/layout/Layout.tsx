@@ -8,6 +8,7 @@ import {
   Settings,
   Activity,
   Sigma,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,7 +25,8 @@ const SECTIONS = {
     label: "Bonos",
     icon: Activity,
     /** Prefijo que identifica las rutas de la sección. "/" => raíz (bonos). */
-    match: (path: string) => !path.startsWith("/opciones"),
+    match: (path: string) =>
+      !path.startsWith("/opciones") && !path.startsWith("/acciones"),
     items: [
       { to: "/", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/charts", icon: LineChart, label: "Gráficos" },
@@ -40,19 +42,34 @@ const SECTIONS = {
       { to: "/opciones", icon: LayoutDashboard, label: "Simulador", end: true },
     ] as NavItem[],
   },
+  acciones: {
+    label: "Acciones",
+    icon: TrendingUp,
+    match: (path: string) => path.startsWith("/acciones"),
+    items: [
+      {
+        to: "/acciones",
+        icon: TrendingUp,
+        label: "CI vs 24hs",
+        end: true,
+      },
+    ] as NavItem[],
+  },
 } as const;
 
 type SectionKey = keyof typeof SECTIONS;
 const SECTION_ROOT: Record<SectionKey, string> = {
   bonos: "/",
   opciones: "/opciones",
+  acciones: "/acciones",
 };
 
 export function Layout() {
   const { pathname } = useLocation();
-  const activeSection: SectionKey = SECTIONS.opciones.match(pathname)
-    ? "opciones"
-    : "bonos";
+  const activeSection: SectionKey =
+    (Object.keys(SECTIONS) as SectionKey[]).find((key) =>
+      key !== "bonos" ? SECTIONS[key].match(pathname) : false,
+    ) ?? "bonos";
   const nav = SECTIONS[activeSection].items;
 
   return (

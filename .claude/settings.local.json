@@ -78,7 +78,23 @@
       "PowerShell(pnpm --filter backend check:pase)",
       "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-e2e-ws.ts)",
       "PowerShell(Remove-Item \"f:\\\\Proyectos\\\\arbitraje-bonos\\\\packages\\\\backend\\\\src\\\\modules\\\\stocks\\\\scripts\\\\_tmp-e2e-ws.ts\" -Confirm:$false)",
-      "PowerShell(pnpm --filter frontend exec tsc --noEmit)"
+      "PowerShell(pnpm --filter frontend exec tsc --noEmit)",
+      "Bash(npx playwright *)",
+      "PowerShell(\\(Test-NetConnection -ComputerName localhost -Port 27017 -WarningAction SilentlyContinue\\).TcpTestSucceeded)",
+      "PowerShell(pnpm --filter frontend exec vite --port 5173)",
+      "Bash(curl -sf http://localhost:5173)",
+      "Bash(break)",
+      "Bash(curl -sf http://localhost:3001/api/stocks/arbitrage/settings)",
+      "Bash(mkdir -p screenshots)",
+      "Bash(node verify-stocks-view.mjs)",
+      "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-dev-with-fake-ticks.ts)",
+      "Bash(curl -s http://localhost:3001/api/stocks/arbitrage/settings)",
+      "Bash(rm -rf \"C:\\\\Users\\\\santi\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\f--Proyectos-arbitraje-bonos\\\\62595b0d-41cb-4cb5-af3d-f7fa70b7d945\\\\scratchpad\\\\node_modules\" \"C:\\\\Users\\\\santi\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\f--Proyectos-arbitraje-bonos\\\\62595b0d-41cb-4cb5-af3d-f7fa70b7d945\\\\scratchpad\\\\package.json\" \"C:\\\\Users\\\\santi\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\f--Proyectos-arbitraje-bonos\\\\62595b0d-41cb-4cb5-af3d-f7fa70b7d945\\\\scratchpad\\\\package-lock.json\")",
+      "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" status --short)",
+      "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" status)",
+      "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" log --oneline -5)",
+      "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" show --stat HEAD)",
+      "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-e2e-snapshot.ts)"
     ]
   },
   "enabledPlugins": {

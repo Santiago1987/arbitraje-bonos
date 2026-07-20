@@ -6,6 +6,7 @@ import ChartsView from "./features/bonds/components/charts/ChartsView";
 import MultiChartsView from "./features/bonds/components/multicharts/MultiChartsView";
 import SettingsPage from "./features/bonds/components/settings/SettingsPage";
 import SimulatorView from "./features/options/SimulatorView";
+import StockArbView from "./features/stocks/components/StockArbView";
 import type { PairLiveData } from "@arbitraje/shared";
 import { useMarketStore } from "./features/bonds/store/marketStore";
 import { useSettingsStore } from "./features/bonds/store/settingsStore";
@@ -87,6 +88,8 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           {/* Sección Opciones */}
           <Route path="opciones" element={<SimulatorView />} />
+          {/* Sección Acciones */}
+          <Route path="acciones" element={<StockArbView />} />
         </Route>
       </Routes>
     </BrowserRouter>

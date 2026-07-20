@@ -9,6 +9,7 @@ import type {
 } from "@arbitraje/shared";
 import { eventBus } from "./services/event-bus.js";
 import { bymaConnector } from "./services/byma-connector.service.js";
+import { stockArbService } from "../stocks/services/stock-arb.service.js";
 import { logger } from "../../utils/logger.js";
 
 interface ClientState {
@@ -121,6 +122,14 @@ class WSServer {
         } else if (payload.channel === "stocks") {
           state.subscribedStocks = true;
           logger.debug({ clientId }, "Suscrito a arbitraje de acciones");
+          // Foto actual (ya vive en RAM) para no esperar al próximo tick.
+          for (const update of stockArbService.getSnapshot()) {
+            this.send(state.ws, {
+              type: "stock_arb_update",
+              payload: update,
+              timestamp: new Date(),
+            });
+          }
         }
         break;
       }

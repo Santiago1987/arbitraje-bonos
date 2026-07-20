@@ -9,6 +9,7 @@
  * Settings (watchlist y costo) viven en el doc singleton `stock_arb_settings`
  * y se cachean en memoria; `reload()` se llama al boot y en cada PUT.
  */
+import type { StockArbUpdate } from "@arbitraje/shared";
 import { StockArbSettingsModel, type StockArbSettings } from "../models.js";
 import { eventBus } from "../../bonds/services/event-bus.js";
 import { marketDataService } from "../../bonds/services/market-data.service.js";
@@ -107,7 +108,12 @@ class StockArbService {
   }
 
   private emitUpdate(base: string): void {
-    if (!this.settings) return;
+    const update = this.computeUpdate(base);
+    if (update) eventBus.emit("stockarb:update", update);
+  }
+
+  private computeUpdate(base: string): StockArbUpdate | null {
+    if (!this.settings) return null;
     const s = this.settings;
     const ci = marketDataService.getBidAsk(`${base}_CI`);
     const h24 = marketDataService.getBidAsk(`${base}_24hs`);
@@ -125,7 +131,7 @@ class StockArbService {
       }
     }
 
-    eventBus.emit("stockarb:update", {
+    return {
       ticker: base,
       ci,
       h24,
@@ -136,7 +142,17 @@ class StockArbService {
       diasCaucion: caucion?.dias ?? null,
       costoCaucion: s.costoCaucion,
       timestamp: new Date(),
-    });
+    };
+  }
+
+  /** Foto actual de toda la watchlist — para el cliente que recién se suscribe. */
+  getSnapshot(): StockArbUpdate[] {
+    const updates: StockArbUpdate[] = [];
+    for (const base of this.watched) {
+      const update = this.computeUpdate(base);
+      if (update) updates.push(update);
+    }
+    return updates;
   }
 }
 
