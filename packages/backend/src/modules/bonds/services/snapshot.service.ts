@@ -47,6 +47,16 @@ class SnapshotService {
    * Toma una foto del estado actual y la persiste.
    */
   private async takeSnapshot(): Promise<void> {
+    // ponytail: si no llegó un tick en el último intervalo, lo que hay en RAM
+    // es una foto vieja (rueda cerrada o BYMA caído) → no persistir duplicados.
+    const lastTickAt = marketDataService.getStats().lastTickAt;
+    if (
+      !lastTickAt ||
+      Date.now() - lastTickAt.getTime() > config.SNAPSHOT_INTERVAL_MS
+    ) {
+      return;
+    }
+
     try {
       const [pairs, bonds] = await Promise.all([
         BondPairModel.find({ isActive: true }).lean(),

@@ -95,7 +95,8 @@
       "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" log --oneline -5)",
       "Bash(git -C \"f:\\\\Proyectos\\\\arbitraje-bonos\" show --stat HEAD)",
       "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-e2e-snapshot.ts)",
-      "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-check-insertone.ts)"
+      "PowerShell(pnpm --filter backend exec tsx src/modules/stocks/scripts/_tmp-check-insertone.ts)",
+      "PowerShell(npx --no-install tsc --noEmit -p packages/backend/tsconfig.json)"
     ]
   },
   "enabledPlugins": {
