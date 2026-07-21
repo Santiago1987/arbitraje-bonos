@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,8 @@
     "seed": "tsx src/modules/bonds/scripts/seed.ts",
     "backfill:candles": "tsx src/modules/bonds/scripts/backfill-candles.ts",
     "backfill:iol": "tsx src/modules/bonds/scripts/backfill-iol-historical.ts",
-    "check:pase": "tsx src/modules/stocks/scripts/check-pase.ts"
+    "check:pase": "tsx src/modules/stocks/scripts/check-pase.ts",
+    "stock-seed": "tsx src/modules/stocks/scripts/seed.ts"
   },
   "dependencies": {
     "@arbitraje/shared": "workspace:*",

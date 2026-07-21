@@ -220,8 +220,8 @@ class BymaConnector {
       ticker = parts[0].split("_")[2] + "_" + parts[0].split("_")[3];
       data = {
         num_oper: parts[1],
-        prc_comp: parts[2],
-        cant_comp: parts[3],
+        cant_comp: parts[2],
+        prc_comp: parts[3],
         prc_venta: parts[4],
         cant_venta: parts[5],
         prc_act: parts[6],
