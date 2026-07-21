@@ -701,7 +701,7 @@ const stocks = [
 ];
 
 const seed = async () => {
-  console.log("Conectando a MongoDB...");
+  console.log("Conectando a MongoDB: " + MONGO_URI);
   await mongoose.connect(MONGO_URI);
 
   console.log("Eliminando colecciones...");
