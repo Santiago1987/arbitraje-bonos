@@ -1,5 +1,11 @@
-import type { WSMessage, PairLiveData, AlertEvent } from "@arbitraje/shared";
+import type {
+  WSMessage,
+  PairLiveData,
+  AlertEvent,
+  StockArbUpdate,
+} from "@arbitraje/shared";
 import { useMarketStore } from "../store/marketStore";
+import { useStockArbStore } from "../../stocks/store/stockArbStore";
 import { playAlertSound } from "./sound";
 
 /**
@@ -14,6 +20,7 @@ let ws: WebSocket | null = null;
 let retryCount = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let subscribedPairIds = new Set<string>();
+let subscribedStocks = false;
 let manuallyClosed = false;
 
 function send(msg: WSMessage) {
@@ -40,6 +47,9 @@ function handleMessage(event: MessageEvent) {
   switch (msg.type) {
     case "pair_update":
       store.updateLive(msg.payload as PairLiveData);
+      break;
+    case "stock_arb_update":
+      useStockArbStore.getState().updateRow(msg.payload as StockArbUpdate);
       break;
     case "alert_triggered":
       store.addAlert(msg.payload as AlertEvent);
@@ -75,6 +85,14 @@ function connect() {
       send({
         type: "subscribe",
         payload: { channel: "pairs", pairIds: [...subscribedPairIds] },
+        timestamp: new Date(),
+      });
+    }
+
+    if (subscribedStocks) {
+      send({
+        type: "subscribe",
+        payload: { channel: "stocks" },
         timestamp: new Date(),
       });
     }
@@ -115,6 +133,28 @@ export function closeWS() {
     ws = null;
   }
   subscribedPairIds.clear();
+  subscribedStocks = false;
+}
+
+/** Suscripción al arbitraje de acciones CI/24hs. La llama la vista al montar. */
+export function subscribeToStocks() {
+  if (subscribedStocks) return;
+  subscribedStocks = true;
+  send({
+    type: "subscribe",
+    payload: { channel: "stocks" },
+    timestamp: new Date(),
+  });
+}
+
+export function unsubscribeFromStocks() {
+  if (!subscribedStocks) return;
+  subscribedStocks = false;
+  send({
+    type: "unsubscribe",
+    payload: { channel: "stocks" },
+    timestamp: new Date(),
+  });
 }
 
 export function subscribeToPairs(pairIds: string[]) {

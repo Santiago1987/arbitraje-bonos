@@ -266,6 +266,30 @@ export interface AlertEvent {
   timestamp: Date;
 }
 
+// --- Arbitraje de acciones CI vs 24hs ---
+
+/** Push por WS cada vez que cambia una pata (CI o 24hs) de una acción monitoreada. */
+export interface StockArbUpdate {
+  ticker: string;
+  /** Precios usados en el cálculo. null si esa pata todavía no tiene datos. */
+  ci: { bid: number; ask: number } | null;
+  h24: { bid: number; ask: number } | null;
+  /** bid 24hs − ask CI. null si falta una pata. */
+  diferencia: number | null;
+  /** Mínimo rentable de la diferencia según tasa de caución + costos. */
+  valorPase: number | null;
+  /** diferencia − valorPase. */
+  ganancia: number | null;
+  /**
+   * Tasa/días de caución usados: del ticker PESOS_xD de menor plazo con datos
+   * (TNA decimal). null si todavía no llegó ninguna caución → valorPase null.
+   */
+  tasaCaucion: number | null;
+  diasCaucion: number | null;
+  costoCaucion: number;
+  timestamp: Date;
+}
+
 // --- WebSocket Messages ---
 
 export type WSMessageType =
@@ -273,6 +297,7 @@ export type WSMessageType =
   | "pair_update"
   | "alert_triggered"
   | "byma_status"
+  | "stock_arb_update"
   | "subscribe"
   | "unsubscribe"
   | "heartbeat";
@@ -284,7 +309,7 @@ export interface WSMessage<T = unknown> {
 }
 
 export interface WSSubscribePayload {
-  channel: "pairs" | "alerts" | "ticks";
+  channel: "pairs" | "alerts" | "ticks" | "stocks";
   pairIds?: string[];
 }
 

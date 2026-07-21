@@ -1,5 +1,10 @@
 import { EventEmitter } from "node:events";
-import type { RawTickData, PairLiveData, AlertEvent } from "@arbitraje/shared";
+import type {
+  RawTickData,
+  PairLiveData,
+  AlertEvent,
+  StockArbUpdate,
+} from "@arbitraje/shared";
 
 // Definimos todos los eventos que pueden circular por el sistema
 export interface AppEvents {
@@ -25,6 +30,9 @@ export interface AppEvents {
 
   // Estado de la conexión BYMA cambió
   "byma:status": { connected: boolean };
+
+  // Arbitraje CI/24hs de una acción recalculado (cambió una de sus patas)
+  "stockarb:update": StockArbUpdate;
 }
 
 // EventEmitter tipado

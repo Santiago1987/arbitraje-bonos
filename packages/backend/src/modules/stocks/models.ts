@@ -39,3 +39,31 @@ export const ArgStockModel = mongoose.model<ArgStockDoc>(
   argStockSchema,
   "Arg_Stock",
 );
+
+/**
+ * Settings del arbitraje CI vs 24hs. Documento singleton (_id: "global").
+ * La tasa y los días de caución NO se guardan: vienen en vivo del WS de BYMA
+ * (tickers PESOS_1D..4D, ver StockArbService.getTasaCaucion).
+ */
+export interface StockArbSettings {
+  _id: string;
+  /** Tickers a monitorear (sin plazo, ej. "GGAL"). Los pares CI/24hs son implícitos. */
+  tickers: string[];
+  /** Costo sobre la tasa (default 1.15% = 0.0115). */
+  costoCaucion: number;
+}
+
+const stockArbSettingsSchema = new Schema<StockArbSettings>(
+  {
+    _id: { type: String, default: "global" },
+    tickers: { type: [String], default: [] },
+    costoCaucion: { type: Number, default: 0.0115 },
+  },
+  { timestamps: true },
+);
+
+export const StockArbSettingsModel = mongoose.model(
+  "StockArbSettings",
+  stockArbSettingsSchema,
+  "stock_arb_settings",
+);
