@@ -13,6 +13,9 @@ RUN pnpm install --frozen-lockfile
 # Resto del código fuente del frontend
 COPY packages/frontend/ ./packages/frontend/
 
+ARG COMMIT_HASH=dev
+ENV COMMIT_HASH=$COMMIT_HASH
+
 RUN pnpm --filter frontend build
 
 FROM nginx:alpine

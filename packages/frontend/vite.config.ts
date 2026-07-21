@@ -3,7 +3,9 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { execSync } from 'child_process';
 
+// En Docker no hay .git ni binario git → el CI inyecta COMMIT_HASH como build arg.
 const commitHash = (() => {
+  if (process.env.COMMIT_HASH) return process.env.COMMIT_HASH.slice(0, 7);
   try {
     return execSync('git rev-parse --short HEAD').toString().trim();
   } catch {

@@ -78,6 +78,8 @@ jobs:
           context: .
           file: packages/frontend/Dockerfile
           push: true
+          build-args: |
+            COMMIT_HASH=${{ github.sha }}
           tags: |
             ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:latest
             ${{ env.REGISTRY }}/${{ steps.img.outputs.name }}:${{ github.sha }}
