@@ -272,8 +272,8 @@ export interface AlertEvent {
 export interface StockArbUpdate {
   ticker: string;
   /** Precios usados en el cálculo. null si esa pata todavía no tiene datos. */
-  ci: { bid: number; ask: number } | null;
-  h24: { bid: number; ask: number } | null;
+  ci: number | null;
+  h24: number | null;
   /** bid 24hs − ask CI. null si falta una pata. */
   diferencia: number | null;
   /** Mínimo rentable de la diferencia según tasa de caución + costos. */

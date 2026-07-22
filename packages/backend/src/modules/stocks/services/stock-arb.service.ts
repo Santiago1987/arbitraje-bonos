@@ -115,8 +115,8 @@ class StockArbService {
   private computeUpdate(base: string): StockArbUpdate | null {
     if (!this.settings) return null;
     const s = this.settings;
-    const ci = marketDataService.getBidAsk(`${base}_CI`);
-    const h24 = marketDataService.getBidAsk(`${base}_24hs`);
+    const ci = marketDataService.getPrice(`${base}_CI`);
+    const h24 = marketDataService.getPrice(`${base}_24hs`);
     const caucion = this.getTasaCaucion();
 
     let diferencia: number | null = null;
@@ -124,9 +124,9 @@ class StockArbService {
     let ganancia: number | null = null;
     if (ci && h24) {
       // Arbitraje ejecutable: vendés 24hs al bid, comprás CI al ask
-      diferencia = h24.bid - ci.ask;
+      diferencia = h24 - ci;
       if (caucion) {
-        pase = valorPase(h24.bid, caucion.tasa, s.costoCaucion, caucion.dias);
+        pase = valorPase(h24, caucion.tasa, s.costoCaucion, caucion.dias);
         ganancia = diferencia - pase;
       }
     }

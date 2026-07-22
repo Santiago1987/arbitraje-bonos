@@ -18,10 +18,16 @@ const StockArbTable = ({ rows }: Props) => {
     <div className="overflow-hidden rounded-lg">
       <div className="grid grid-cols-6 gap-px bg-surface-3/20 text-xs uppercase tracking-wider text-muted font-medium">
         <div className="card px-2 py-2">Ticker</div>
-        <div className="card px-2 py-2 text-right" title="Precio ask usado en el cálculo (compra CI)">
+        <div
+          className="card px-2 py-2 text-right"
+          title="Precio ask usado en el cálculo (compra CI)"
+        >
           CI
         </div>
-        <div className="card px-2 py-2 text-right" title="Precio bid usado en el cálculo (venta 24hs)">
+        <div
+          className="card px-2 py-2 text-right"
+          title="Precio bid usado en el cálculo (venta 24hs)"
+        >
           24hs
         </div>
         <div className="card px-2 py-2 text-right">Diferencia</div>
@@ -44,15 +50,17 @@ const StockArbTable = ({ rows }: Props) => {
             </div>
             <div
               className="card px-2 py-2 text-right"
-              title={r.ci ? `bid ${fmt(r.ci.bid)} / ask ${fmt(r.ci.ask)}` : undefined}
+              title={r.ci ? `bid ${fmt(r.ci)} / ask ${fmt(r.ci)}` : undefined}
             >
-              {r.ci ? fmt(r.ci.ask) : "—"}
+              {r.ci ? fmt(r.ci) : "—"}
             </div>
             <div
               className="card px-2 py-2 text-right"
-              title={r.h24 ? `bid ${fmt(r.h24.bid)} / ask ${fmt(r.h24.ask)}` : undefined}
+              title={
+                r.h24 ? `bid ${fmt(r.h24)} / ask ${fmt(r.h24)}` : undefined
+              }
             >
-              {r.h24 ? fmt(r.h24.bid) : "—"}
+              {r.h24 ? fmt(r.h24) : "—"}
             </div>
             <div className="card px-2 py-2 text-right">{fmt(r.diferencia)}</div>
             <div className="card px-2 py-2 text-right">{fmt(r.valorPase)}</div>
